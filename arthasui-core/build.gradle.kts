@@ -142,11 +142,12 @@ intellijPlatform {
 
     }
 
-    signing {
-        certificateChainFile = layout.projectDirectory.file("certificate/chain.crt")
-        privateKeyFile = layout.projectDirectory.file("certificate/private_encrypted.pem")
-        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
-    }
+    // Signing configuration commented out - not required for building without publishing
+    // signing {
+    //     certificateChainFile = layout.projectDirectory.file("certificate/chain.crt")
+    //     privateKeyFile = layout.projectDirectory.file("certificate/private_encrypted.pem")
+    //     password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    // }
 
 
     publishing {
