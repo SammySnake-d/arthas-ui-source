@@ -142,20 +142,22 @@ intellijPlatform {
 
     }
 
-    signing {
-        certificateChainFile = layout.projectDirectory.file("certificate/chain.crt")
-        privateKeyFile = layout.projectDirectory.file("certificate/private_encrypted.pem")
-        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
-    }
+    // 不需要签名，只需要构建打包
+    // signing {
+    //     certificateChainFile = layout.projectDirectory.file("certificate/chain.crt")
+    //     privateKeyFile = layout.projectDirectory.file("certificate/private_encrypted.pem")
+    //     password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    // }
 
 
-    publishing {
-        token = providers.environmentVariable("PUBLISH_TOKEN")
-        // The pluginVersion is based on the SemVer (https://semver.org) and supports pre-release labels, like 2.1.7-alpha.3
-        // Specify pre-release label to publish the plugin in a custom Release Channel automatically. Read more:
-        // https://plugins.jetbrains.com/docs/intellij/deployment.html#specifying-a-release-channel
-        channels = providers.gradleProperty("pluginVersion").map { listOf(it.substringAfter('-', "").substringBefore('.').ifEmpty { "default" }) }
-    }
+    // 不需要发布到 JetBrains Marketplace
+    // publishing {
+    //     token = providers.environmentVariable("PUBLISH_TOKEN")
+    //     // The pluginVersion is based on the SemVer (https://semver.org) and supports pre-release labels, like 2.1.7-alpha.3
+    //     // Specify pre-release label to publish the plugin in a custom Release Channel automatically. Read more:
+    //     // https://plugins.jetbrains.com/docs/intellij/deployment.html#specifying-a-release-channel
+    //     channels = providers.gradleProperty("pluginVersion").map { listOf(it.substringAfter('-', "").substringBefore('.').ifEmpty { "default" }) }
+    // }
 
     pluginVerification {
         ides {
@@ -186,8 +188,9 @@ tasks {
         targetCompatibility = "17"
     }
 
-    publishPlugin {
-        dependsOn(patchChangelog)
-    }
+    // 不需要发布插件的任务配置
+    // publishPlugin {
+    //     dependsOn(patchChangelog)
+    // }
 
 }
