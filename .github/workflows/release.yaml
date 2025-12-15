@@ -1,6 +1,5 @@
 # GitHub Actions Workflow created for handling the release process based on the draft release prepared with the Build workflow.
-# Running the publishPlugin task requires all following secrets to be provided: PUBLISH_TOKEN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN.
-# See https://plugins.jetbrains.com/docs/intellij/plugin-signing.html for more information.
+# This workflow builds the plugin and uploads it as a release asset without publishing to JetBrains Marketplace.
 
 name: Release
 on:
@@ -9,9 +8,9 @@ on:
 
 jobs:
 
-  # Prepare and publish the plugin to JetBrains Marketplace repository
+  # Build the plugin and release it as a GitHub release asset
   release:
-    name: Publish Plugin
+    name: Build Plugin
     runs-on: ubuntu-latest
     permissions:
       contents: write
