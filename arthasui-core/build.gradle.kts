@@ -188,8 +188,9 @@ tasks {
         targetCompatibility = "17"
     }
 
-    publishPlugin {
-        dependsOn(patchChangelog)
-    }
+    // 不需要发布插件的任务配置
+    // publishPlugin {
+    //     dependsOn(patchChangelog)
+    // }
 
 }
