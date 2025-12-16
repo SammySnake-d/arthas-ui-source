@@ -9,8 +9,8 @@ import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.JBList
 import com.intellij.ui.dsl.builder.Align
-import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.toMutableProperty
 import io.github.vudsen.arthasui.api.conf.ArthasUISettings
 import io.github.vudsen.arthasui.api.conf.ArthasUISettingsPersistent
 import io.github.vudsen.arthasui.api.conf.HostMachineConfig
@@ -61,9 +61,14 @@ class RootConfigUI : Disposable {
             }
             group("Shortcuts:") {
                 row("Execute Command Shortcut") {
-                    textField()
-                        .bindText(settingState::executeCommandShortcut)
-                        .comment("Example: ${ArthasUISettings.defaultShortcut()}. Leave empty to disable.")
+                    val shortcutField = ShortcutTextField(settingState.executeCommandShortcut)
+                    cell(shortcutField)
+                        .bind(
+                            { it.shortcutValue },
+                            { component, value -> component.setShortcut(value) },
+                            settingState::executeCommandShortcut.toMutableProperty()
+                        )
+                        .comment("Press a key combination to set. Press Escape or Backspace to clear.")
                         .align(Align.FILL)
                 }
             }
