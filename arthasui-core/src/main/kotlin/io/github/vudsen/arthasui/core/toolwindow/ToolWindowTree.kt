@@ -193,16 +193,11 @@ class ToolWindowTree(val project: Project) : Disposable {
                     ArthasExecutionManager.VF_ATTRIBUTES,
                     VirtualFileAttributes(
                         consoleTarget.jvm,
-<<<<<<< copilot/fix-subnode-click-error
                         topRootNode.getConnectConfig(),
-                        consoleTarget.providerConfig)
-=======
-                        (consoleTarget.sourceNode.getTopRootNode() as DefaultHostMachineTreeNode).getConnectConfig(),
                         consoleTarget.providerConfig,
                         consoleTarget.tabId,
                         consoleTarget.displayName
                     )
->>>>>>> master
                 )
                 ApplicationManager.getApplication().invokeLater {
                     fileEditorManager.openFile(lightVirtualFile, true)
