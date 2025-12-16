@@ -28,17 +28,30 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
             var hostMachineConfig: HostMachineConfig
         )
 
+        /**
+         * Composite key for storing bridges, combining JVM and tabId
+         */
+        private data class BridgeKey(
+            val jvmId: String,
+            val tabId: String?
+        )
+
     }
 
     /**
-     * 保存所有链接
+     * 保存所有链接，使用复合键支持同一JVM的多个控制台窗口
      */
-    private val bridges = ConcurrentHashMap<JVM, ArthasBridgeHolder>()
+    private val bridges = ConcurrentHashMap<BridgeKey, ArthasBridgeHolder>()
 
-    private fun getHolderAndEnsureAlive(jvm: JVM): ArthasBridgeHolder? {
-        bridges[jvm] ?.let {
+    private fun createKey(jvm: JVM, tabId: String?): BridgeKey {
+        return BridgeKey(jvm.id, tabId)
+    }
+
+    private fun getHolderAndEnsureAlive(jvm: JVM, tabId: String?): ArthasBridgeHolder? {
+        val key = createKey(jvm, tabId)
+        bridges[key] ?.let {
             if (it.arthasBridge.isClosed()) {
-                bridges.remove(jvm)
+                bridges.remove(key)
                 return null
             }
             return it
@@ -47,12 +60,13 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
     }
 
 
-    private fun getOrInitHolder(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig): ArthasBridgeHolder {
-        var holder = getHolderAndEnsureAlive(jvm)
+    private fun getOrInitHolder(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig, tabId: String?): ArthasBridgeHolder {
+        var holder = getHolderAndEnsureAlive(jvm, tabId)
         if (holder != null) {
             return holder
         }
-        log.info("Creating new arthas bridge for $jvm")
+        val key = createKey(jvm, tabId)
+        log.info("Creating new arthas bridge for $jvm with tabId=$tabId")
 
         val arthasBridgeFactory =
             service<JvmProviderManager>().getProvider(providerConfig).createArthasBridgeFactory(jvm, providerConfig)
@@ -60,12 +74,12 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
 
         arthasBridgeTemplate.addListener(object : ArthasBridgeListener() {
             override fun onClose() {
-                bridges.remove(jvm)
+                bridges.remove(key)
             }
         })
         holder = ArthasBridgeHolder(arthasBridgeTemplate, hostMachineConfig)
 
-        bridges[jvm] = holder
+        bridges[key] = holder
         return holder
     }
 
@@ -73,23 +87,23 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
     /**
      * 初始化一个 [ArthasBridgeTemplate]
      */
-    override fun initTemplate(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig): ArthasBridgeTemplate {
-        return getOrInitHolder(jvm, hostMachineConfig, providerConfig).arthasBridge
+    override fun initTemplate(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig, tabId: String?): ArthasBridgeTemplate {
+        return getOrInitHolder(jvm, hostMachineConfig, providerConfig, tabId).arthasBridge
     }
 
 
     /**
      * 是否已经连接过了
      */
-    override fun isAttached(jvm: JVM): Boolean{
-        return getHolderAndEnsureAlive(jvm) != null
+    override fun isAttached(jvm: JVM, tabId: String?): Boolean{
+        return getHolderAndEnsureAlive(jvm, tabId) != null
     }
 
     /**
      * 获取已经创建的 [ArthasBridgeTemplate]，需要先调用 [initTemplate] 来缓存
      */
-    override fun getTemplate(jvm: JVM): ArthasBridgeTemplate? {
-        return getHolderAndEnsureAlive(jvm)?.arthasBridge
+    override fun getTemplate(jvm: JVM, tabId: String?): ArthasBridgeTemplate? {
+        return getHolderAndEnsureAlive(jvm, tabId)?.arthasBridge
     }
 
 
