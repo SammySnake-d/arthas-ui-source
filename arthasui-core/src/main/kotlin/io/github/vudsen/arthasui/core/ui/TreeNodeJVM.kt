@@ -15,6 +15,12 @@ data class ArthasTab(
     val name: String
 )
 
+enum class AddTabResult {
+    SUCCESS,
+    EMPTY,
+    DUPLICATE
+}
+
 class TreeNodeJVM(
     val providerConfig: JvmProviderConfig,
     val jvm: JVM,
@@ -56,16 +62,16 @@ class TreeNodeJVM(
         return ctx.root
     }
 
-    fun addTab(name: String): Boolean {
+    fun addTab(name: String): AddTabResult {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) {
-            return false
+            return AddTabResult.EMPTY
         }
         if (tabs.any { it.name == trimmed }) {
-            return false
+            return AddTabResult.DUPLICATE
         }
         tabs.add(ArthasTab(name = trimmed))
-        return true
+        return AddTabResult.SUCCESS
     }
 
     fun removeTab(tabId: String) {
@@ -73,13 +79,12 @@ class TreeNodeJVM(
     }
 
     fun nextTabName(): String {
-        var index = tabs.size + 1
-        var candidate: String
-        do {
-            candidate = "Tab $index"
+        val existingNames = tabs.mapTo(mutableSetOf()) { it.name }
+        var index = 1
+        while (existingNames.contains("Tab $index")) {
             index++
-        } while (tabs.any { it.name == candidate })
-        return candidate
+        }
+        return "Tab $index"
     }
 
     internal fun tabDisplayName(tab: ArthasTab): String {

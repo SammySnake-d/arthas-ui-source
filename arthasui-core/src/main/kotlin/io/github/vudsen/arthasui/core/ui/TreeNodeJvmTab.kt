@@ -26,7 +26,7 @@ class TreeNodeJvmTab(
     }
 
     override fun resolveText(): JLabel {
-        return JLabel(tab.name)
+        return JLabel(displayName())
     }
 
     override fun getTopRootNode(): RecursiveTreeNode {
@@ -39,6 +39,7 @@ class TreeNodeJvmTab(
 
         if (tab.id != other.tab.id) return false
         if (parentJvm.jvm != other.parentJvm.jvm) return false
+        if (parentJvm.providerConfig != other.parentJvm.providerConfig) return false
 
         return true
     }
@@ -46,10 +47,11 @@ class TreeNodeJvmTab(
     override fun hashCode(): Int {
         var result = tab.id.hashCode()
         result = 31 * result + parentJvm.jvm.hashCode()
+        result = 31 * result + parentJvm.providerConfig.hashCode()
         return result
     }
 
     override fun toString(): String {
-        return tab.name
+        return displayName()
     }
 }

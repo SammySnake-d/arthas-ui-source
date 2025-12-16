@@ -9,6 +9,7 @@ import io.github.vudsen.arthasui.conf.JvmSearchGroupConfigurable
 import io.github.vudsen.arthasui.conf.JvmSearchGroupDeleteConfigurable
 import io.github.vudsen.arthasui.core.ui.CustomSearchGroupTreeNode
 import io.github.vudsen.arthasui.core.ui.DefaultHostMachineTreeNode
+import io.github.vudsen.arthasui.core.ui.AddTabResult
 import io.github.vudsen.arthasui.core.ui.TreeNodeJVM
 import io.github.vudsen.arthasui.core.ui.TreeNodeJvmTab
 import java.awt.Component
@@ -97,12 +98,20 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
                     suggested,
                     null
                 ) ?: return
-                if (!jvmNode.addTab(name)) {
-                    Messages.showWarningDialog(toolWindowTree.project, "Tab name is empty or already exists.", "Cannot Create Tab")
-                    return
+                when (jvmNode.addTab(name)) {
+                    AddTabResult.EMPTY -> {
+                        Messages.showWarningDialog(toolWindowTree.project, "Tab name cannot be empty.", "Cannot Create Tab")
+                        return
+                    }
+                    AddTabResult.DUPLICATE -> {
+                        Messages.showWarningDialog(toolWindowTree.project, "Tab name already exists.", "Cannot Create Tab")
+                        return
+                    }
+                    AddTabResult.SUCCESS -> {
+                        jvmNode.refreshNode(true)
+                        toolWindowTree.tree.updateUI()
+                    }
                 }
-                jvmNode.refreshNode(true)
-                toolWindowTree.tree.updateUI()
             }
         })
         add(object : AnAction("Create Custom Search Group", "", AllIcons.Nodes.Folder) {

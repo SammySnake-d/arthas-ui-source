@@ -84,12 +84,14 @@ class ArthasQueryConsoleActionGroup(
         if (shortcutText.isBlank()) {
             return
         }
-        runCatching {
-            val shortcutSet = CustomShortcutSet.fromString(shortcutText)
-            action.registerCustomShortcutSet(shortcutSet, editorEx.component)
-        }.onFailure {
-            log.warn("Failed to apply execute command shortcut: $shortcutText", it)
-        }
+        val shortcutSet = runCatching { CustomShortcutSet.fromString(shortcutText) }
+            .onFailure {
+                val actionText = action.templatePresentation.text ?: action.javaClass.simpleName
+                val editorName = editorEx.virtualFile?.name ?: editorEx.javaClass.simpleName
+                log.warn("Failed to parse execute command shortcut: $shortcutText for $actionText in $editorName", it)
+            }
+            .getOrNull() ?: return
+        action.registerCustomShortcutSet(shortcutSet, editorEx.component)
     }
 
     /**
