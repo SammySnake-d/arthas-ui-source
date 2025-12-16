@@ -86,6 +86,21 @@ class ToolWindowTree(val project: Project) : Disposable {
     }
 
     /**
+     * Handle error from background task, log the error and show error dialog to user.
+     */
+    private fun handleBackgroundError(error: Throwable, logMessage: String, dialogTitle: String) {
+        if (MessagesUtils.isNotAppException(error)) {
+            logger.error(logMessage, error)
+        }
+        val actualMsg = if (error.message == null) {
+            error.cause?.message
+        } else {
+            error.message
+        }
+        Messages.showErrorDialog(project, actualMsg, dialogTitle)
+    }
+
+    /**
      * 刷新某个一个节点
      */
     fun launchRefreshNodeTask(node: RecursiveTreeNode, force: Boolean) {
@@ -112,15 +127,7 @@ class ToolWindowTree(val project: Project) : Disposable {
             }
 
             override fun onThrowable(error: Throwable) {
-                if (MessagesUtils.isNotAppException(error)) {
-                    logger.error("Failed to load nodes", error)
-                }
-                val actualMsg = if (error.message == null) {
-                    error.cause?.message
-                } else {
-                    error.message
-                }
-                Messages.showErrorDialog(project, actualMsg, "Load Failed")
+                handleBackgroundError(error, "Failed to load nodes", "Load Failed")
             }
         })
     }
@@ -193,15 +200,7 @@ class ToolWindowTree(val project: Project) : Disposable {
             }
 
             override fun onThrowable(error: Throwable) {
-                if (MessagesUtils.isNotAppException(error)) {
-                    logger.error("Failed to open query console", error)
-                }
-                val actualMsg = if (error.message == null) {
-                    error.cause?.message
-                } else {
-                    error.message
-                }
-                Messages.showErrorDialog(project, actualMsg, "Open Console Failed")
+                handleBackgroundError(error, "Failed to open query console", "Open Console Failed")
             }
 
         })
