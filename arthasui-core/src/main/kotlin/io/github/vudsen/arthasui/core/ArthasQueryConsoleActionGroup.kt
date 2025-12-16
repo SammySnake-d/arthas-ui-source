@@ -6,6 +6,9 @@ import com.intellij.execution.RunManager
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.actionSystem.CustomShortcutSet
+import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
@@ -14,7 +17,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowId
 import io.github.vudsen.arthasui.api.ArthasExecutionManager
 import io.github.vudsen.arthasui.api.bean.VirtualFileAttributes
-import io.github.vudsen.arthasui.api.exception.AppException
+import io.github.vudsen.arthasui.api.conf.ArthasUISettingsPersistent
 import io.github.vudsen.arthasui.common.util.MessagesUtils
 import io.github.vudsen.arthasui.common.util.ProgressIndicatorStack
 import io.github.vudsen.arthasui.core.ui.ExecutionGutterIconRenderer
@@ -29,6 +32,12 @@ class ArthasQueryConsoleActionGroup(
     private val editorEx: EditorEx,
     private val virtualFileAttributes: VirtualFileAttributes
 ) : ActionGroup() {
+
+    companion object {
+        private val log = Logger.getInstance(ArthasQueryConsoleActionGroup::class.java)
+    }
+
+    private val settingsPersistent = service<ArthasUISettingsPersistent>()
 
     private var lastHighlighter: RangeHighlighter? = null
 
@@ -68,6 +77,21 @@ class ArthasQueryConsoleActionGroup(
             }
         }
         return builder.toString()
+    }
+
+    private fun registerShortcut(action: AnAction) {
+        val shortcutText = settingsPersistent.state.executeCommandShortcut
+        if (shortcutText.isBlank()) {
+            return
+        }
+        val shortcutSet = runCatching { CustomShortcutSet.fromString(shortcutText) }
+            .onFailure {
+                val actionText = action.templatePresentation.text ?: action.javaClass.simpleName
+                val editorName = editorEx.virtualFile?.name ?: editorEx.javaClass.simpleName
+                log.warn("Failed to parse execute command shortcut: $shortcutText for $actionText in $editorName", it)
+            }
+            .getOrNull() ?: return
+        action.registerCustomShortcutSet(shortcutSet, editorEx.component)
     }
 
     /**
@@ -146,16 +170,17 @@ class ArthasQueryConsoleActionGroup(
     }
 
 
-    private val actions: Array<AnAction> = arrayOf(
-        object : AnAction("Execute Command", "Execute the arthas command", AllIcons.RunConfigurations.TestState.Run) {
+    private val executeCommandAction = object : AnAction("Execute Command", "Execute the arthas command", AllIcons.RunConfigurations.TestState.Run) {
 
-
-            override fun actionPerformed(e: AnActionEvent) {
-                runSelected(editorEx)
-            }
-
+        override fun actionPerformed(e: AnActionEvent) {
+            runSelected(editorEx)
         }
-    )
+
+    }.apply {
+        registerShortcut(this)
+    }
+
+    private val actions: Array<AnAction> = arrayOf(executeCommandAction)
 
     override fun getChildren(e: AnActionEvent?): Array<AnAction> {
         return actions

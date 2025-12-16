@@ -3,14 +3,26 @@ package io.github.vudsen.arthasui.core.toolwindow
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.ui.Messages
 import com.intellij.ui.PopupHandler
 import io.github.vudsen.arthasui.conf.JvmSearchGroupConfigurable
 import io.github.vudsen.arthasui.conf.JvmSearchGroupDeleteConfigurable
 import io.github.vudsen.arthasui.core.ui.CustomSearchGroupTreeNode
 import io.github.vudsen.arthasui.core.ui.DefaultHostMachineTreeNode
+import io.github.vudsen.arthasui.core.ui.AddTabResult
+import io.github.vudsen.arthasui.core.ui.TreeNodeJVM
+import io.github.vudsen.arthasui.core.ui.TreeNodeJvmTab
 import java.awt.Component
 
 class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : PopupHandler() {
+
+    private fun resolveJvmNode(): TreeNodeJVM? {
+        return when (val node = toolWindowTree.currentFocusedNode()) {
+            is TreeNodeJVM -> node
+            is TreeNodeJvmTab -> node.parentJvm
+            else -> null
+        }
+    }
 
     private val actions: DefaultActionGroup = DefaultActionGroup().apply {
         add(object : AnAction("Delete") {
@@ -20,20 +32,26 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
             }
 
             override fun update(e: AnActionEvent) {
-                e.presentation.isEnabled = toolWindowTree.currentFocusedNode() is CustomSearchGroupTreeNode
+                val node = toolWindowTree.currentFocusedNode()
+                e.presentation.isEnabled = node is CustomSearchGroupTreeNode || node is TreeNodeJvmTab
             }
 
             override fun actionPerformed(p0: AnActionEvent) {
-                val node = toolWindowTree.currentFocusedNode()
-                if (node !is CustomSearchGroupTreeNode) {
-                    return
-                }
-                val root = node.getTopRootNode() as DefaultHostMachineTreeNode
+                when (val node = toolWindowTree.currentFocusedNode()) {
+                    is CustomSearchGroupTreeNode -> {
+                        val root = node.getTopRootNode() as DefaultHostMachineTreeNode
 
-                ShowSettingsUtil.getInstance().editConfigurable(
-                    toolWindowTree.project,
-                    JvmSearchGroupDeleteConfigurable(toolWindowTree.project, root.config, node.group)
-                )
+                        ShowSettingsUtil.getInstance().editConfigurable(
+                            toolWindowTree.project,
+                            JvmSearchGroupDeleteConfigurable(toolWindowTree.project, root.config, node.group)
+                        )
+                    }
+                    is TreeNodeJvmTab -> {
+                        node.parentJvm.removeTab(node.tabId)
+                        node.parentJvm.refreshNode(true)
+                        toolWindowTree.tree.updateUI()
+                    }
+                }
             }
         })
         add(object : AnAction("Update") {
@@ -57,6 +75,43 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
                     toolWindowTree.project,
                     JvmSearchGroupConfigurable(toolWindowTree.project, root.config, node.group)
                 )
+            }
+        })
+        add(object : AnAction("New Tab", "", AllIcons.General.Add) {
+
+            override fun getActionUpdateThread(): ActionUpdateThread {
+                return ActionUpdateThread.EDT
+            }
+
+            override fun update(e: AnActionEvent) {
+                e.presentation.isEnabled = resolveJvmNode() != null
+            }
+
+            override fun actionPerformed(evt: AnActionEvent) {
+                val jvmNode = resolveJvmNode() ?: return
+                val suggested = jvmNode.nextTabName()
+                val name = Messages.showInputDialog(
+                    toolWindowTree.project,
+                    "Enter tab name",
+                    "Create Arthas Tab",
+                    null,
+                    suggested,
+                    null
+                ) ?: return
+                when (jvmNode.addTab(name)) {
+                    AddTabResult.EMPTY -> {
+                        Messages.showWarningDialog(toolWindowTree.project, "Tab name cannot be empty.", "Cannot Create Tab")
+                        return
+                    }
+                    AddTabResult.DUPLICATE -> {
+                        Messages.showWarningDialog(toolWindowTree.project, "Tab name already exists.", "Cannot Create Tab")
+                        return
+                    }
+                    AddTabResult.SUCCESS -> {
+                        jvmNode.refreshNode(true)
+                        toolWindowTree.tree.updateUI()
+                    }
+                }
             }
         })
         add(object : AnAction("Create Custom Search Group", "", AllIcons.Nodes.Folder) {
