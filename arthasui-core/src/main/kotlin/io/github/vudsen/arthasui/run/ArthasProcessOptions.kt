@@ -9,4 +9,14 @@ class ArthasProcessOptions : RunConfigurationOptions() {
      * @see com.intellij.execution.configurations.RunConfigurationBase.loadState
      */
     lateinit var jvm: JVM
+    
+    /**
+     * Unique identifier for the tab, used to support multiple console windows per JVM.
+     */
+    var tabId: String? = null
+    
+    /**
+     * Display name for the console window, typically the tab name.
+     */
+    var displayName: String? = null
 }

@@ -18,19 +18,22 @@ interface ArthasExecutionManager {
 
     /**
      * 初始化一个 [ArthasBridgeTemplate]
+     * @param tabId Unique identifier for the tab, if null uses JVM id
      */
-    fun initTemplate(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig): ArthasBridgeTemplate
+    fun initTemplate(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig, tabId: String? = null): ArthasBridgeTemplate
 
 
     /**
      * 是否已经连接过了
+     * @param tabId Unique identifier for the tab, if null uses JVM id
      */
-    fun isAttached(jvm: JVM): Boolean
+    fun isAttached(jvm: JVM, tabId: String? = null): Boolean
 
     /**
      * 获取已经创建的 [ArthasBridgeTemplate]
+     * @param tabId Unique identifier for the tab, if null uses JVM id
      */
-    fun getTemplate(jvm: JVM): ArthasBridgeTemplate?
+    fun getTemplate(jvm: JVM, tabId: String? = null): ArthasBridgeTemplate?
 
 
 }

@@ -120,7 +120,10 @@ class ArthasQueryConsoleActionGroup(
             override fun run(indicator: ProgressIndicator) {
                 ProgressIndicatorStack.push(indicator)
                 val coordinator = project.getService(ArthasExecutionManager::class.java)
-                coordinator.getTemplate(virtualFileAttributes.jvm) ?.let {
+                val tabId = virtualFileAttributes.tabId
+                val displayName = virtualFileAttributes.displayName ?: virtualFileAttributes.jvm.name
+                
+                coordinator.getTemplate(virtualFileAttributes.jvm, tabId) ?.let {
                     it.execute(selected)
                     return
                 }
@@ -128,16 +131,19 @@ class ArthasQueryConsoleActionGroup(
                 val arthasBridgeTemplate = coordinator.initTemplate(
                     virtualFileAttributes.jvm,
                     virtualFileAttributes.hostMachineConfig,
-                    virtualFileAttributes.providerConfig
+                    virtualFileAttributes.providerConfig,
+                    tabId
                 )
 
                 val runnerAndConfigurationSettings = RunManager.getInstance(project)
-                    .createConfiguration(virtualFileAttributes.jvm.name, ArthasConfigurationType::class.java)
+                    .createConfiguration(displayName, ArthasConfigurationType::class.java)
 
                 runnerAndConfigurationSettings.isTemporary = true
                 val base = runnerAndConfigurationSettings.configuration as RunConfigurationBase<ArthasProcessOptions>
                 base.loadState(ArthasProcessOptions().apply {
                     jvm = virtualFileAttributes.jvm
+                    this.tabId = virtualFileAttributes.tabId
+                    this.displayName = displayName
                 })
 
                 ProgramRunnerUtil.executeConfiguration(

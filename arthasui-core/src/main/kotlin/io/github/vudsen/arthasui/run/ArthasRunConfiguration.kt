@@ -21,7 +21,9 @@ class ArthasRunConfiguration(
             override fun startProcess(): ProcessHandler {
                 return ArthasProcessHandler(
                     project,
-                    state.jvm
+                    state.jvm,
+                    state.tabId,
+                    state.displayName
                 )
             }
         }
