@@ -58,6 +58,14 @@ class RootConfigUI : Disposable {
                     cell(createMainTable()).align(Align.FILL)
                 }
             }
+            group("Shortcuts:") {
+                row("Execute Command Shortcut") {
+                    textField()
+                        .bindText(settingState::executeCommandShortcut)
+                        .comment("Example: ${ArthasUISettings.defaultShortcut()}. Leave empty to disable.")
+                        .align(Align.FILL)
+                }
+            }
         }
 
         currentRoot.registerValidators(this)

@@ -20,9 +20,12 @@ import io.github.vudsen.arthasui.api.ui.RecursiveTreeNode
 import io.github.vudsen.arthasui.common.ui.AbstractRecursiveTreeNode
 import io.github.vudsen.arthasui.core.ui.TreeNodeJVM
 import io.github.vudsen.arthasui.api.conf.ArthasUISettingsPersistent
+import io.github.vudsen.arthasui.api.conf.JvmProviderConfig
+import io.github.vudsen.arthasui.api.JVM
 import io.github.vudsen.arthasui.common.util.MessagesUtils
 import io.github.vudsen.arthasui.common.util.ProgressIndicatorStack
 import io.github.vudsen.arthasui.core.ui.DefaultHostMachineTreeNode
+import io.github.vudsen.arthasui.core.ui.TreeNodeJvmTab
 import io.github.vudsen.arthasui.language.arthas.psi.ArthasFileType
 import java.awt.Dimension
 import javax.swing.JComponent
@@ -61,6 +64,26 @@ class ToolWindowTree(val project: Project) : Disposable {
     }
 
     private var isRunning = false
+
+    private data class ConsoleTarget(
+        val displayName: String,
+        val jvm: JVM,
+        val providerConfig: JvmProviderConfig,
+        val sourceNode: RecursiveTreeNode
+    )
+
+    private fun resolveConsoleTarget(node: RecursiveTreeNode?): ConsoleTarget? {
+        return when (node) {
+            is TreeNodeJvmTab -> ConsoleTarget(
+                node.displayName(),
+                node.parentJvm.jvm,
+                node.parentJvm.providerConfig,
+                node
+            )
+            is TreeNodeJVM -> ConsoleTarget(node.jvm.name, node.jvm, node.providerConfig, node)
+            else -> null
+        }
+    }
 
     /**
      * 刷新某个一个节点
@@ -122,38 +145,39 @@ class ToolWindowTree(val project: Project) : Disposable {
     }
 
     fun tryOpenQueryConsole() {
-        val node = currentFocusedNode()
-        if (node !is TreeNodeJVM) {
-            return
-        }
+        tryOpenQueryConsole(currentFocusedNode())
+    }
+
+    fun tryOpenQueryConsole(target: RecursiveTreeNode?) {
+        val consoleTarget = resolveConsoleTarget(target) ?: return
 
         ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Ensure JVM is alive", true) {
 
             override fun run(indicator: ProgressIndicator) {
-                val provider = service<JvmProviderManager>().getProvider(node.jvm.context.providerConfig)
-                if (provider.isJvmInactive(node.jvm)) {
+                val provider = service<JvmProviderManager>().getProvider(consoleTarget.providerConfig)
+                if (provider.isJvmInactive(consoleTarget.jvm)) {
                     ApplicationManager.getApplication().invokeLater {
-                        Messages.showWarningDialog(project, "Jvm ${node.jvm.name} is not active, please refresh and try again!", "Jvm Not Available")
+                        Messages.showWarningDialog(project, "Jvm ${consoleTarget.jvm.name} is not active, please refresh and try again!", "Jvm Not Available")
                     }
                     return
                 }
 
                 val fileEditorManager = FileEditorManager.getInstance(project)
 
-                fileEditorManager.allEditors.find { e -> e.file.fileType == ArthasFileType && e.file.name == node.jvm.name } ?.let {
+                fileEditorManager.allEditors.find { e -> e.file.fileType == ArthasFileType && e.file.name == consoleTarget.displayName } ?.let {
                     ApplicationManager.getApplication().invokeLater {
                         fileEditorManager.openFile(it.file, true, true)
                     }
                     return
                 }
 
-                val lightVirtualFile = LightVirtualFile(node.jvm.name, ArthasFileType, "")
+                val lightVirtualFile = LightVirtualFile(consoleTarget.displayName, ArthasFileType, "")
                 lightVirtualFile.putUserData(
                     ArthasExecutionManager.VF_ATTRIBUTES,
                     VirtualFileAttributes(
-                        node.jvm,
-                        (node.getTopRootNode() as DefaultHostMachineTreeNode).getConnectConfig(),
-                        node.providerConfig)
+                        consoleTarget.jvm,
+                        (consoleTarget.sourceNode.getTopRootNode() as DefaultHostMachineTreeNode).getConnectConfig(),
+                        consoleTarget.providerConfig)
                 )
                 ApplicationManager.getApplication().invokeLater {
                     fileEditorManager.openFile(lightVirtualFile, true)
