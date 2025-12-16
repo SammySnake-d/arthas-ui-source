@@ -2,9 +2,11 @@ package io.github.vudsen.arthasui.core.toolwindow
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.components.service
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.Messages
 import com.intellij.ui.PopupHandler
+import io.github.vudsen.arthasui.api.conf.TabContentPersistent
 import io.github.vudsen.arthasui.conf.JvmSearchGroupConfigurable
 import io.github.vudsen.arthasui.conf.JvmSearchGroupDeleteConfigurable
 import io.github.vudsen.arthasui.core.ui.CustomSearchGroupTreeNode
@@ -47,6 +49,8 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
                         )
                     }
                     is TreeNodeJvmTab -> {
+                        // Remove persisted content when tab is deleted
+                        service<TabContentPersistent>().removeContent(node.tabId)
                         node.parentJvm.removeTab(node.tabId)
                         node.parentJvm.refreshNode(true)
                         toolWindowTree.tree.updateUI()
