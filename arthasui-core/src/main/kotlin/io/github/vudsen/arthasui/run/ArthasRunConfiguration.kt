@@ -46,7 +46,7 @@ class ArthasRunConfiguration(
         startedProcess: ProcessHandler
     ) {
         if (manager is LogConsoleManagerBase) {
-            manager.addAdditionalTabComponent(ExecuteHistoryUI(project, state.jvm), "io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI", null, false)
+            manager.addAdditionalTabComponent(ExecuteHistoryUI(project, state.jvm, state.tabId), "io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI", null, false)
         }
 
     }

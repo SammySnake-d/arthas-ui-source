@@ -27,7 +27,7 @@ import java.awt.FlowLayout
 import java.util.LinkedList
 import javax.swing.*
 
-class ExecuteHistoryUI(project: Project, jvm: JVM) : AdditionalTabComponent() {
+class ExecuteHistoryUI(project: Project, jvm: JVM, tabId: String? = null) : AdditionalTabComponent() {
 
     private val historyCommand = CollectionListModel<CardItem>(LinkedList(), true)
 
@@ -56,7 +56,7 @@ class ExecuteHistoryUI(project: Project, jvm: JVM) : AdditionalTabComponent() {
         add(splitter, BorderLayout.CENTER)
         splitter.divider.border = JBUI.Borders.customLineRight(JBUI.CurrentTheme.Toolbar.SEPARATOR_COLOR)
         val coordinator = project.getService(ArthasExecutionManager::class.java)
-        val template = coordinator.getTemplate(jvm)!!
+        val template = coordinator.getTemplate(jvm, tabId)!!
 
         template.addListener(object : ArthasBridgeListener() {
 
