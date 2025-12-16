@@ -88,6 +88,21 @@ class ToolWindowTree(val project: Project) : Disposable {
     }
 
     /**
+     * Handle error from background task, log the error and show error dialog to user.
+     */
+    private fun handleBackgroundError(error: Throwable, logMessage: String, dialogTitle: String) {
+        if (MessagesUtils.isNotAppException(error)) {
+            logger.error(logMessage, error)
+        }
+        val actualMsg = if (error.message == null) {
+            error.cause?.message
+        } else {
+            error.message
+        }
+        Messages.showErrorDialog(project, actualMsg, dialogTitle)
+    }
+
+    /**
      * 刷新某个一个节点
      */
     fun launchRefreshNodeTask(node: RecursiveTreeNode, force: Boolean) {
@@ -114,15 +129,7 @@ class ToolWindowTree(val project: Project) : Disposable {
             }
 
             override fun onThrowable(error: Throwable) {
-                if (MessagesUtils.isNotAppException(error)) {
-                    logger.error("Failed to load nodes", error)
-                }
-                val actualMsg = if (error.message == null) {
-                    error.cause?.message
-                } else {
-                    error.message
-                }
-                Messages.showErrorDialog(project, actualMsg, "Load Failed")
+                handleBackgroundError(error, "Failed to load nodes", "Load Failed")
             }
         })
     }
@@ -173,20 +180,37 @@ class ToolWindowTree(val project: Project) : Disposable {
                     return
                 }
 
+                val topRootNode = consoleTarget.sourceNode.getTopRootNode()
+                if (topRootNode !is DefaultHostMachineTreeNode) {
+                    ApplicationManager.getApplication().invokeLater {
+                        Messages.showErrorDialog(project, "Unable to resolve host machine configuration", "Open Console Failed")
+                    }
+                    return
+                }
+
                 val lightVirtualFile = LightVirtualFile(consoleTarget.displayName, ArthasFileType, "")
                 lightVirtualFile.putUserData(
                     ArthasExecutionManager.VF_ATTRIBUTES,
                     VirtualFileAttributes(
                         consoleTarget.jvm,
+<<<<<<< copilot/fix-subnode-click-error
+                        topRootNode.getConnectConfig(),
+                        consoleTarget.providerConfig)
+=======
                         (consoleTarget.sourceNode.getTopRootNode() as DefaultHostMachineTreeNode).getConnectConfig(),
                         consoleTarget.providerConfig,
                         consoleTarget.tabId,
                         consoleTarget.displayName
                     )
+>>>>>>> master
                 )
                 ApplicationManager.getApplication().invokeLater {
                     fileEditorManager.openFile(lightVirtualFile, true)
                 }
+            }
+
+            override fun onThrowable(error: Throwable) {
+                handleBackgroundError(error, "Failed to open query console", "Open Console Failed")
             }
 
         })
