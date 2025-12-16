@@ -171,17 +171,37 @@ class ToolWindowTree(val project: Project) : Disposable {
                     return
                 }
 
+                val topRootNode = consoleTarget.sourceNode.getTopRootNode()
+                if (topRootNode !is DefaultHostMachineTreeNode) {
+                    ApplicationManager.getApplication().invokeLater {
+                        Messages.showErrorDialog(project, "Unable to resolve host machine configuration", "Open Console Failed")
+                    }
+                    return
+                }
+
                 val lightVirtualFile = LightVirtualFile(consoleTarget.displayName, ArthasFileType, "")
                 lightVirtualFile.putUserData(
                     ArthasExecutionManager.VF_ATTRIBUTES,
                     VirtualFileAttributes(
                         consoleTarget.jvm,
-                        (consoleTarget.sourceNode.getTopRootNode() as DefaultHostMachineTreeNode).getConnectConfig(),
+                        topRootNode.getConnectConfig(),
                         consoleTarget.providerConfig)
                 )
                 ApplicationManager.getApplication().invokeLater {
                     fileEditorManager.openFile(lightVirtualFile, true)
                 }
+            }
+
+            override fun onThrowable(error: Throwable) {
+                if (MessagesUtils.isNotAppException(error)) {
+                    logger.error("Failed to open query console", error)
+                }
+                val actualMsg = if (error.message == null) {
+                    error.cause?.message
+                } else {
+                    error.message
+                }
+                Messages.showErrorDialog(project, actualMsg, "Open Console Failed")
             }
 
         })
