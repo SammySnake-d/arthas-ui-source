@@ -9,6 +9,7 @@ import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.ToolbarDecorator
 import com.intellij.ui.components.JBList
 import com.intellij.ui.dsl.builder.Align
+import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import io.github.vudsen.arthasui.api.conf.ArthasUISettings
 import io.github.vudsen.arthasui.api.conf.ArthasUISettingsPersistent
