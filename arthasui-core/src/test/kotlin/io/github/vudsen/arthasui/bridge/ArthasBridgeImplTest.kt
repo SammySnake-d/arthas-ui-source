@@ -43,11 +43,13 @@ class ArthasBridgeImplTest : BasePlatformTestCase() {
         val builder = StringBuilder()
         val executedCommand = mutableListOf<String>()
         val executeResult = mutableListOf<String>()
+        val testTabId = "test-tab-id"
         try {
             val arthasBridge = executionManager.initTemplate(
                 jvm,
                 template.getHostMachineConfig(),
                 providerConfig,
+                testTabId,
             )
             arthasBridge.addListener(object : ArthasBridgeListener() {
                 override fun onContent(result: String) {
@@ -66,7 +68,7 @@ class ArthasBridgeImplTest : BasePlatformTestCase() {
             arthasBridge.attachNow()
             arthasBridge.waitUntilAttached()
 
-            executionManager.getTemplate(jvm)!!.let {
+            executionManager.getTemplate(jvm, testTabId)!!.let {
                 it.execute("sc demo.*")
                 it.execute("echo hello")
                 it.stop()

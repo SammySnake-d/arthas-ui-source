@@ -18,19 +18,22 @@ interface ArthasExecutionManager {
 
     /**
      * 初始化一个 [ArthasBridgeTemplate]
+     * @param tabId 唯一标识每个控制台的 ID，每个 tab 都有独立的控制台进程
      */
-    fun initTemplate(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig): ArthasBridgeTemplate
+    fun initTemplate(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig, tabId: String): ArthasBridgeTemplate
 
 
     /**
      * 是否已经连接过了
+     * @param tabId 唯一标识每个控制台的 ID
      */
-    fun isAttached(jvm: JVM): Boolean
+    fun isAttached(jvm: JVM, tabId: String): Boolean
 
     /**
      * 获取已经创建的 [ArthasBridgeTemplate]
+     * @param tabId 唯一标识每个控制台的 ID
      */
-    fun getTemplate(jvm: JVM): ArthasBridgeTemplate?
+    fun getTemplate(jvm: JVM, tabId: String): ArthasBridgeTemplate?
 
 
 }

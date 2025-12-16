@@ -9,4 +9,9 @@ class ArthasProcessOptions : RunConfigurationOptions() {
      * @see com.intellij.execution.configurations.RunConfigurationBase.loadState
      */
     lateinit var jvm: JVM
+    
+    /**
+     * 唯一标识每个控制台的 ID，每个 tab 都有独立的控制台进程
+     */
+    lateinit var tabId: String
 }

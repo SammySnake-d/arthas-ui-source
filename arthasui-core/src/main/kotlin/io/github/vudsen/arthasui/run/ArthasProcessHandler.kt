@@ -17,6 +17,7 @@ import java.io.StringWriter
 class ArthasProcessHandler(
     private val project: Project,
     private val jvm: JVM,
+    private val tabId: String,
 ) : ProcessHandler(), AnsiEscapeDecoder.ColoredTextAcceptor {
 
     private val myAnsiEscapeDecoder = AnsiEscapeDecoder()
@@ -58,7 +59,7 @@ class ArthasProcessHandler(
                 ApplicationManager.getApplication().executeOnPooledThread {
                     try {
                         val arthasExecutionManager = project.service<ArthasExecutionManager>()
-                        val bridgeTemplate = arthasExecutionManager.getTemplate(jvm)!!
+                        val bridgeTemplate = arthasExecutionManager.getTemplate(jvm, tabId)!!
                         this@ArthasProcessHandler.arthasBridgeTemplate = bridgeTemplate
                         bridgeTemplate.addListener(object : ArthasBridgeListener() {
                             override fun onContent(result: String) {

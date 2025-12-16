@@ -7,6 +7,7 @@ import io.github.vudsen.arthasui.api.conf.JvmProviderConfig
 data class VirtualFileAttributes(
     val jvm: JVM,
     val hostMachineConfig: HostMachineConfig,
-    val providerConfig: JvmProviderConfig
+    val providerConfig: JvmProviderConfig,
+    val tabId: String
 )
 
