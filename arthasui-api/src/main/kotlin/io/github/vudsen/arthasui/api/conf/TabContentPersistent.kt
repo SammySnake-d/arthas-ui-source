@@ -4,6 +4,7 @@ import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * State class for storing tab content
@@ -12,8 +13,9 @@ class TabContentState(
     /**
      * Map of tabId to content. The key is the unique tab identifier,
      * and the value is the command content saved in that tab.
+     * Using ConcurrentHashMap for thread-safety since this is accessed from multiple threads.
      */
-    var tabContents: MutableMap<String, String> = mutableMapOf()
+    var tabContents: MutableMap<String, String> = ConcurrentHashMap()
 )
 
 /**
@@ -47,12 +49,16 @@ class TabContentPersistent : PersistentStateComponent<TabContentState> {
     }
 
     /**
-     * Save content for a specific tab
+     * Save content for a specific tab.
+     * Only updates if the content has changed to avoid unnecessary serialization.
      * @param tabId The unique identifier for the tab
      * @param content The content to save
      */
     fun setContent(tabId: String, content: String) {
-        myState.tabContents[tabId] = content
+        val currentContent = myState.tabContents[tabId]
+        if (currentContent != content) {
+            myState.tabContents[tabId] = content
+        }
     }
 
     /**

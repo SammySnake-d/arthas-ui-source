@@ -26,9 +26,6 @@ class PsiAwareTextEditorImplWrapper(private val delegate: FileEditor, private va
         private const val SAVE_DELAY_MS = 500 // Debounce delay in milliseconds
     }
 
-    private var documentListener: DocumentListener? = null
-    private var saveAlarm: Alarm? = null
-
     override fun getFile(): VirtualFile = delegate.file
 
     override fun getComponent(): JComponent {
@@ -54,24 +51,26 @@ class PsiAwareTextEditorImplWrapper(private val delegate: FileEditor, private va
         val persistentKey = attributes.tabId ?: attributes.jvm.id
         val tabContentPersistent = service<TabContentPersistent>()
         
-        // Create alarm for debouncing - use delegate as Disposable parent
-        val alarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, delegate as Disposable)
-        saveAlarm = alarm
-        
-        val listener = object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) {
-                val content = event.document.text
-                // Cancel any pending save and schedule a new one
-                alarm.cancelAllRequests()
-                alarm.addRequest({
-                    ApplicationManager.getApplication().invokeLater {
-                        tabContentPersistent.setContent(persistentKey, content)
-                    }
-                }, SAVE_DELAY_MS)
+        // Get Disposable from delegate - FileEditor implements Disposable
+        val disposableParent = delegate as? Disposable
+        if (disposableParent != null) {
+            // Create alarm for debouncing with proper Disposable lifecycle
+            val alarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, disposableParent)
+            
+            val listener = object : DocumentListener {
+                override fun documentChanged(event: DocumentEvent) {
+                    val content = event.document.text
+                    // Cancel any pending save and schedule a new one
+                    alarm.cancelAllRequests()
+                    alarm.addRequest({
+                        ApplicationManager.getApplication().invokeLater {
+                            tabContentPersistent.setContent(persistentKey, content)
+                        }
+                    }, SAVE_DELAY_MS)
+                }
             }
+            editor.document.addDocumentListener(listener, disposableParent)
         }
-        documentListener = listener
-        editor.document.addDocumentListener(listener, delegate as Disposable)
 
         return editorComponent;
     }
