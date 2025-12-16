@@ -17,12 +17,16 @@ import java.io.StringWriter
 class ArthasProcessHandler(
     private val project: Project,
     private val jvm: JVM,
+    private val tabId: String? = null,
+    private val displayName: String? = null
 ) : ProcessHandler(), AnsiEscapeDecoder.ColoredTextAcceptor {
 
     private val myAnsiEscapeDecoder = AnsiEscapeDecoder()
 
     private var arthasBridgeTemplate: ArthasBridgeTemplate? = null
 
+    private val consoleName: String
+        get() = displayName ?: jvm.name
 
     override fun destroyProcessImpl() {
         notifyProcessTerminated(arthasBridgeTemplate?.stop() ?: 1)
@@ -54,11 +58,11 @@ class ArthasProcessHandler(
         addProcessListener(object : ProcessListener {
 
             override fun startNotified(event: ProcessEvent) {
-                notifyTextAvailable("Trying to attach to target jvm: ${jvm.name}\n", ProcessOutputTypes.STDOUT)
+                notifyTextAvailable("Trying to attach to target jvm: $consoleName\n", ProcessOutputTypes.STDOUT)
                 ApplicationManager.getApplication().executeOnPooledThread {
                     try {
                         val arthasExecutionManager = project.service<ArthasExecutionManager>()
-                        val bridgeTemplate = arthasExecutionManager.getTemplate(jvm)!!
+                        val bridgeTemplate = arthasExecutionManager.getTemplate(jvm, tabId)!!
                         this@ArthasProcessHandler.arthasBridgeTemplate = bridgeTemplate
                         bridgeTemplate.addListener(object : ArthasBridgeListener() {
                             override fun onContent(result: String) {
@@ -79,7 +83,7 @@ class ArthasProcessHandler(
                             PrintWriter(result).use { pw ->
                                 e.printStackTrace(pw)
                                 notifyTextAvailable(
-                                    "\nFailed to attach target jvm: ${jvm.name}\n" + result.toString(),
+                                    "\nFailed to attach target jvm: $consoleName\n" + result.toString(),
                                     ProcessOutputTypes.STDERR
                                 )
                             }

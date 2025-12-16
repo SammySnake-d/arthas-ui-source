@@ -69,7 +69,8 @@ class ToolWindowTree(val project: Project) : Disposable {
         val displayName: String,
         val jvm: JVM,
         val providerConfig: JvmProviderConfig,
-        val sourceNode: RecursiveTreeNode
+        val sourceNode: RecursiveTreeNode,
+        val tabId: String? = null
     )
 
     private fun resolveConsoleTarget(node: RecursiveTreeNode?): ConsoleTarget? {
@@ -78,9 +79,10 @@ class ToolWindowTree(val project: Project) : Disposable {
                 node.displayName(),
                 node.parentJvm.jvm,
                 node.parentJvm.providerConfig,
-                node
+                node,
+                node.tabId
             )
-            is TreeNodeJVM -> ConsoleTarget(node.jvm.name, node.jvm, node.providerConfig, node)
+            is TreeNodeJVM -> ConsoleTarget(node.jvm.name, node.jvm, node.providerConfig, node, null)
             else -> null
         }
     }
@@ -177,7 +179,10 @@ class ToolWindowTree(val project: Project) : Disposable {
                     VirtualFileAttributes(
                         consoleTarget.jvm,
                         (consoleTarget.sourceNode.getTopRootNode() as DefaultHostMachineTreeNode).getConnectConfig(),
-                        consoleTarget.providerConfig)
+                        consoleTarget.providerConfig,
+                        consoleTarget.tabId,
+                        consoleTarget.displayName
+                    )
                 )
                 ApplicationManager.getApplication().invokeLater {
                     fileEditorManager.openFile(lightVirtualFile, true)
