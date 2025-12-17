@@ -6,6 +6,7 @@ import com.intellij.execution.Executor
 import com.intellij.execution.configurations.*
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
 import io.github.vudsen.arthasui.api.JVM
@@ -51,7 +52,7 @@ class ArthasRunConfiguration(
     private class BannerWrappedConsole(
         private val delegate: ExecutionConsole,
         banner: ConsoleCommandBanner
-    ) : ExecutionConsole, com.intellij.openapi.Disposable {
+    ) : ExecutionConsole, Disposable {
         
         private val wrapperPanel = JPanel(BorderLayout()).apply {
             add(banner, BorderLayout.NORTH)
@@ -63,7 +64,7 @@ class ArthasRunConfiguration(
         override fun getPreferredFocusableComponent() = delegate.preferredFocusableComponent
         
         override fun dispose() {
-            if (delegate is com.intellij.openapi.Disposable) {
+            if (delegate is Disposable) {
                 delegate.dispose()
             }
         }
