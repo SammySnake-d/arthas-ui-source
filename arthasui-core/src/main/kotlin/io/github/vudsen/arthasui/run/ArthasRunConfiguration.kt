@@ -1,17 +1,16 @@
 package io.github.vudsen.arthasui.run
 
-import com.intellij.execution.ExecutionException
+import com.intellij.diagnostic.logging.LogConsoleManagerBase
+import com.intellij.execution.ExecutionConsole
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.*
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
-import com.intellij.execution.ui.ConsoleView
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.DataProvider // 必须导入这个
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Disposer
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
+import io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -19,10 +18,18 @@ import javax.swing.JPanel
 class ArthasRunConfiguration(
     project: Project,
     configurationFactory: ConfigurationFactory
-) : RunConfigurationBase<ArthasProcessOptions>(project, configurationFactory, "Arthas Query Console") {
+) : RunConfigurationBase<ArthasProcessOptions>(
+    project,
+    configurationFactory,
+    "Arthas Query Console"
+) {
 
-    override fun getState(executor: Executor, environment: ExecutionEnvironment): RunProfileState {
+    override fun getState(
+        executor: Executor,
+        environment: ExecutionEnvironment
+    ): RunProfileState {
         return object : CommandLineState(environment) {
+
             override fun startProcess(): ProcessHandler {
                 return ArthasProcessHandler(
                     project,
@@ -32,47 +39,51 @@ class ArthasRunConfiguration(
                 )
             }
 
-            @Throws(ExecutionException::class)
-            override fun createConsole(executor: Executor): ConsoleView? {
+            /**
+             * ⚠️ 关键点：
+             * - 返回 ExecutionConsole
+             * - 不改变 Console 类型语义
+             */
+            override fun createConsole(executor: Executor): ExecutionConsole? {
                 val console = super.createConsole(executor) ?: return null
+
                 val displayName = state.displayName ?: state.jvm.name
-                val banner = ConsoleCommandBanner(project, state.jvm, state.tabId, displayName)
-                
-                // 返回修复后的 Wrapper
+                val banner = ConsoleCommandBanner(
+                    project,
+                    state.jvm,
+                    state.tabId,
+                    displayName
+                )
+
                 return BannerWrappedConsole(console, banner)
             }
         }
     }
 
     /**
-     * 修复版 Wrapper：
-     * 1. 实现了 ConsoleView (满足新版接口)
-     * 2. 实现了 DataProvider (满足 IDE 数据查询，解决控制台不显示的问题)
+     * UI 包装器（只包 UI，不干预 Console 行为）
      */
     private class BannerWrappedConsole(
-        private val delegate: ConsoleView,
-        private val banner: ConsoleCommandBanner
-    ) : ConsoleView by delegate, DataProvider, Disposable { // <--- 关键：加上 DataProvider
+        private val delegate: ExecutionConsole,
+        private val banner: JComponent
+    ) : ExecutionConsole, Disposable {
 
-        private val wrapperPanel = JPanel(BorderLayout()).apply {
+        private val wrapperPanel: JPanel = JPanel(BorderLayout()).apply {
             add(banner, BorderLayout.NORTH)
             add(delegate.component, BorderLayout.CENTER)
         }
 
         override fun getComponent(): JComponent = wrapperPanel
-        override fun getPreferredFocusableComponent(): JComponent = delegate.preferredFocusableComponent
 
+        override fun getPreferredFocusableComponent(): JComponent? =
+            delegate.preferredFocusableComponent
+
+        /**
+         * ⚠️ 不要额外 dispose delegate
+         * IDE 会统一管理 Console 生命周期
+         */
         override fun dispose() {
-            if (banner is Disposable) Disposer.dispose(banner)
             delegate.dispose()
-        }
-
-        // <--- 核心修复：把数据查询转发给内部的 console
-        override fun getData(dataId: String): Any? {
-            if (delegate is DataProvider) {
-                return (delegate as DataProvider).getData(dataId)
-            }
-            return null
         }
     }
 
@@ -80,13 +91,31 @@ class ArthasRunConfiguration(
         return ArthasSettingsEditor()
     }
 
-    override fun createRunnerSettings(provider: ConfigurationInfoProvider?): ConfigurationPerRunnerSettings? {
+    override fun createRunnerSettings(
+        provider: ConfigurationInfoProvider?
+    ): ConfigurationPerRunnerSettings? {
         return super.createRunnerSettings(provider)
     }
 
     override fun getState(): ArthasProcessOptions {
-        return super.getState() ?: throw ExecutionException("Run configuration state is missing")
+        return super.getState()
+            ?: error("ArthasRunConfiguration state is missing")
     }
-    
-    // createAdditionalTabComponents 已删除
+
+    /**
+     * 追加 History Tab（这是 A 中本来就可行的逻辑）
+     */
+    override fun createAdditionalTabComponents(
+        manager: AdditionalTabComponentManager,
+        startedProcess: ProcessHandler
+    ) {
+        if (manager is LogConsoleManagerBase) {
+            manager.addAdditionalTabComponent(
+                ExecuteHistoryUI(project, state.jvm, state.tabId),
+                "io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI",
+                null,
+                false
+            )
+        }
+    }
 }
