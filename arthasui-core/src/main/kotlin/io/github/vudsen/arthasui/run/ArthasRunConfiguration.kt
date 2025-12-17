@@ -51,7 +51,7 @@ class ArthasRunConfiguration(
     private class BannerWrappedConsole(
         private val delegate: ExecutionConsole,
         banner: ConsoleCommandBanner
-    ) : ExecutionConsole {
+    ) : ExecutionConsole, com.intellij.openapi.Disposable {
         
         private val wrapperPanel = JPanel(BorderLayout()).apply {
             add(banner, BorderLayout.NORTH)
@@ -62,7 +62,11 @@ class ArthasRunConfiguration(
         
         override fun getPreferredFocusableComponent() = delegate.preferredFocusableComponent
         
-        override fun dispose() = delegate.dispose()
+        override fun dispose() {
+            if (delegate is com.intellij.openapi.Disposable) {
+                delegate.dispose()
+            }
+        }
     }
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> {
