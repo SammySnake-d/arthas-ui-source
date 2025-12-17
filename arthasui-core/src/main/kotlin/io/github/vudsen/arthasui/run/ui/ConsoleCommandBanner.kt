@@ -111,10 +111,10 @@ class ConsoleCommandBanner(
         val fileEditorManager = FileEditorManager.getInstance(project)
         
         // Find the query console file by name
-        fileEditorManager.allEditors.find { editor -> 
-            editor.file.fileType == ArthasFileType && editor.file.name == displayName
-        }?.let { editor ->
-            fileEditorManager.openFile(editor.file, true, true)
+        fileEditorManager.allEditors.find { fileEditor -> 
+            fileEditor.file.fileType == ArthasFileType && fileEditor.file.name == displayName
+        }?.let { matchedEditor ->
+            fileEditorManager.openFile(matchedEditor.file, true, true)
         }
     }
     
@@ -314,6 +314,11 @@ class ConsoleCommandBanner(
         }
     }
 
+    /**
+     * Remove surrounding quotes from OGNL expression.
+     * OGNL expressions in Arthas commands are typically wrapped in either single quotes (') or double quotes ("),
+     * but not nested. This handles both cases by attempting to remove each type.
+     */
     private fun cleanOgnl(ognl: String): String {
         return ognl.trim().removeSurrounding("'").removeSurrounding("\"")
     }

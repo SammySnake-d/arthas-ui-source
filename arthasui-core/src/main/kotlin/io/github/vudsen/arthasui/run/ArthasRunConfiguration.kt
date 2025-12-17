@@ -39,16 +39,30 @@ class ArthasRunConfiguration(
                 val displayName = state.displayName ?: state.jvm.name
                 val banner = ConsoleCommandBanner(project, state.jvm, state.tabId, displayName)
                 
-                return object : ExecutionConsole by console {
-                    private val wrapperPanel = JPanel(BorderLayout()).apply {
-                        add(banner, BorderLayout.NORTH)
-                        add(console.component, BorderLayout.CENTER)
-                    }
-                    
-                    override fun getComponent() = wrapperPanel
-                }
+                return BannerWrappedConsole(console, banner)
             }
         }
+    }
+    
+    /**
+     * Wrapper class for ExecutionConsole that adds a banner at the top.
+     * 包装器类，在控制台顶部添加横幅。
+     */
+    private class BannerWrappedConsole(
+        private val delegate: ExecutionConsole,
+        banner: ConsoleCommandBanner
+    ) : ExecutionConsole {
+        
+        private val wrapperPanel = JPanel(BorderLayout()).apply {
+            add(banner, BorderLayout.NORTH)
+            add(delegate.component, BorderLayout.CENTER)
+        }
+        
+        override fun getComponent() = wrapperPanel
+        
+        override fun getPreferredFocusableComponent() = delegate.preferredFocusableComponent
+        
+        override fun dispose() = delegate.dispose()
     }
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> {
