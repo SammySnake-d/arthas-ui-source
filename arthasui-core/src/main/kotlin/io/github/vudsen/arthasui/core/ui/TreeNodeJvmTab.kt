@@ -13,6 +13,13 @@ class TreeNodeJvmTab(
     val tabId: String
         get() = tab.id
 
+    /**
+     * Get the raw tab name without any formatting.
+     */
+    fun getName(): String {
+        return tab.name
+    }
+
     fun displayName(): String {
         return parentJvm.tabDisplayName(tab)
     }
