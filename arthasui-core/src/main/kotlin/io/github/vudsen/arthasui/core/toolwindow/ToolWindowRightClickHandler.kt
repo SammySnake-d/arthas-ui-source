@@ -79,7 +79,7 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
                         )
                     }
                     is TreeNodeJvmTab -> {
-                        val currentName = node.displayName().substringBefore(" (")
+                        val currentName = node.getName()
                         val newName = Messages.showInputDialog(
                             toolWindowTree.project,
                             "Enter new tab name",

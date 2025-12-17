@@ -59,8 +59,7 @@ class CommandInfoBannerPanel(
 
     private fun updateFromSelection() {
         ApplicationManager.getApplication().runReadAction {
-            val selectedText = editor.selectionModel.selectedText
-            if (selectedText.isNullOrBlank()) {
+            if (!editor.selectionModel.hasSelection()) {
                 updateFromCaret()
                 return@runReadAction
             }
@@ -185,7 +184,7 @@ class CommandInfoBannerPanel(
                 command.method?.text?.let { info["Method"] = it }
             }
             is ArthasOgnlCommand -> {
-                command.ognl.text?.let { info["Expression"] = cleanOgnlExpression(it) }
+                command.ognl?.text?.let { info["Expression"] = cleanOgnlExpression(it) }
             }
             is ArthasGetstaticCommand -> {
                 command.clazz?.text?.let { info["Class"] = it }

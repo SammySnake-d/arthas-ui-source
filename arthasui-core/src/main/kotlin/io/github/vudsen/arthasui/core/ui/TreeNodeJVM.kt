@@ -49,10 +49,6 @@ class TreeNodeJVM(
         tabs.addAll(persistedTabs.map { ArthasTab(it.id, it.name) })
     }
 
-    private fun persistTabs() {
-        tabPersistent.setTabs(getJvmKey(), tabs.map { PersistedTab(it.id, it.name) })
-    }
-
     override fun refresh(): List<AbstractRecursiveTreeNode> {
         // Reload persisted tabs on refresh
         loadPersistedTabs()

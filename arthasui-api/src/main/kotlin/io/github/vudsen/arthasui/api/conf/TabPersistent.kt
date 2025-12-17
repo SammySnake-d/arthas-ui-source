@@ -115,16 +115,4 @@ class TabPersistent : PersistentStateComponent<TabPersistentState> {
         tab.name = newName
         return true
     }
-
-    /**
-     * Check if a tab name already exists for a JVM.
-     * @param jvmKey The unique JVM key
-     * @param name The tab name to check
-     * @param excludeTabId Optional tab ID to exclude from the check (for rename operations)
-     * @return true if the name exists, false otherwise
-     */
-    fun tabNameExists(jvmKey: String, name: String, excludeTabId: String? = null): Boolean {
-        val tabs = myState.jvmTabs[jvmKey] ?: return false
-        return tabs.any { it.name == name && it.id != excludeTabId }
-    }
 }
