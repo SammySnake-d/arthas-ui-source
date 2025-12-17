@@ -15,7 +15,10 @@ import com.intellij.util.Alarm
 import com.intellij.util.ui.UIUtil
 import io.github.vudsen.arthasui.api.ArthasExecutionManager
 import io.github.vudsen.arthasui.api.conf.TabContentPersistent
+import io.github.vudsen.arthasui.core.ui.CommandInfoBannerPanel
+import java.awt.BorderLayout
 import javax.swing.JComponent
+import javax.swing.JPanel
 
 /**
  * bypass 'internal' limitation.
@@ -45,7 +48,15 @@ class PsiAwareTextEditorImplWrapper(private val delegate: FileEditor, private va
         actionToolbar.targetComponent = editorComponent
         editorComponent.background = UIUtil.getPanelBackground()
 
-        editor.headerComponent = actionToolbar.component
+        // Create a combined header panel with toolbar and command info banner
+        val headerPanel = JPanel(BorderLayout())
+        headerPanel.add(actionToolbar.component, BorderLayout.NORTH)
+        
+        // Add command info banner panel
+        val commandInfoBanner = CommandInfoBannerPanel(project, editor)
+        headerPanel.add(commandInfoBanner, BorderLayout.CENTER)
+        
+        editor.headerComponent = headerPanel
 
         // Add document listener with debouncing to persist content changes
         val persistentKey = attributes.tabId ?: attributes.jvm.id

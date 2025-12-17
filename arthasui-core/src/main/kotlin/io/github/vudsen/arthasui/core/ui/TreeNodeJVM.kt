@@ -1,8 +1,11 @@
 package io.github.vudsen.arthasui.core.ui
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.shortenTextWithEllipsis
 import io.github.vudsen.arthasui.api.conf.JvmProviderConfig
 import io.github.vudsen.arthasui.api.JVM
+import io.github.vudsen.arthasui.api.conf.PersistedTab
+import io.github.vudsen.arthasui.api.conf.TabPersistent
 import io.github.vudsen.arthasui.api.ui.RecursiveTreeNode
 import io.github.vudsen.arthasui.common.ui.AbstractRecursiveTreeNode
 import java.util.UUID
@@ -12,7 +15,7 @@ import javax.swing.tree.DefaultMutableTreeNode
 
 data class ArthasTab(
     val id: String = UUID.randomUUID().toString(),
-    val name: String
+    var name: String
 )
 
 enum class AddTabResult {
@@ -29,8 +32,30 @@ class TreeNodeJVM(
 ) : AbstractRecursiveTreeNode() {
 
     private val tabs = CopyOnWriteArrayList<ArthasTab>()
+    private val tabPersistent = service<TabPersistent>()
+
+    private fun getJvmKey(): String {
+        return tabPersistent.generateJvmKey(ctx.config.id, providerConfig.type, jvm.id)
+    }
+
+    init {
+        // Load persisted tabs on initialization
+        loadPersistedTabs()
+    }
+
+    private fun loadPersistedTabs() {
+        val persistedTabs = tabPersistent.getTabs(getJvmKey())
+        tabs.clear()
+        tabs.addAll(persistedTabs.map { ArthasTab(it.id, it.name) })
+    }
+
+    private fun persistTabs() {
+        tabPersistent.setTabs(getJvmKey(), tabs.map { PersistedTab(it.id, it.name) })
+    }
 
     override fun refresh(): List<AbstractRecursiveTreeNode> {
+        // Reload persisted tabs on refresh
+        loadPersistedTabs()
         return tabs.map { TreeNodeJvmTab(it, this) }
     }
 
@@ -70,12 +95,33 @@ class TreeNodeJVM(
         if (tabs.any { it.name == trimmed }) {
             return AddTabResult.DUPLICATE
         }
-        tabs.add(ArthasTab(name = trimmed))
+        val newTab = ArthasTab(name = trimmed)
+        tabs.add(newTab)
+        // Persist the new tab
+        tabPersistent.addTab(getJvmKey(), PersistedTab(newTab.id, newTab.name))
         return AddTabResult.SUCCESS
     }
 
     fun removeTab(tabId: String) {
         tabs.removeIf { it.id == tabId }
+        // Remove from persistence
+        tabPersistent.removeTab(getJvmKey(), tabId)
+    }
+
+    fun updateTabName(tabId: String, newName: String): AddTabResult {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) {
+            return AddTabResult.EMPTY
+        }
+        // Check if name already exists (excluding the current tab)
+        if (tabs.any { it.id != tabId && it.name == trimmed }) {
+            return AddTabResult.DUPLICATE
+        }
+        val tab = tabs.find { it.id == tabId } ?: return AddTabResult.EMPTY
+        tab.name = trimmed
+        // Update persistence
+        tabPersistent.updateTabName(getJvmKey(), tabId, trimmed)
+        return AddTabResult.SUCCESS
     }
 
     fun nextTabName(): String {

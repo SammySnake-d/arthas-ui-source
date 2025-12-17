@@ -61,7 +61,8 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
         add(object : AnAction("Update") {
 
             override fun update(e: AnActionEvent) {
-                e.presentation.isEnabled = toolWindowTree.currentFocusedNode() is CustomSearchGroupTreeNode
+                val node = toolWindowTree.currentFocusedNode()
+                e.presentation.isEnabled = node is CustomSearchGroupTreeNode || node is TreeNodeJvmTab
             }
 
             override fun getActionUpdateThread(): ActionUpdateThread {
@@ -69,16 +70,40 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
             }
 
             override fun actionPerformed(e: AnActionEvent) {
-                val node = toolWindowTree.currentFocusedNode()
-                if (node !is CustomSearchGroupTreeNode) {
-                    return
+                when (val node = toolWindowTree.currentFocusedNode()) {
+                    is CustomSearchGroupTreeNode -> {
+                        val root = node.getTopRootNode() as DefaultHostMachineTreeNode
+                        ShowSettingsUtil.getInstance().editConfigurable(
+                            toolWindowTree.project,
+                            JvmSearchGroupConfigurable(toolWindowTree.project, root.config, node.group)
+                        )
+                    }
+                    is TreeNodeJvmTab -> {
+                        val currentName = node.displayName().substringBefore(" (")
+                        val newName = Messages.showInputDialog(
+                            toolWindowTree.project,
+                            "Enter new tab name",
+                            "Rename Tab",
+                            null,
+                            currentName,
+                            null
+                        ) ?: return
+                        when (node.parentJvm.updateTabName(node.tabId, newName)) {
+                            AddTabResult.EMPTY -> {
+                                Messages.showWarningDialog(toolWindowTree.project, "Tab name cannot be empty.", "Cannot Rename Tab")
+                                return
+                            }
+                            AddTabResult.DUPLICATE -> {
+                                Messages.showWarningDialog(toolWindowTree.project, "Tab name already exists.", "Cannot Rename Tab")
+                                return
+                            }
+                            AddTabResult.SUCCESS -> {
+                                node.parentJvm.refreshNode(true)
+                                toolWindowTree.tree.updateUI()
+                            }
+                        }
+                    }
                 }
-                val root = node.getTopRootNode() as DefaultHostMachineTreeNode
-
-                ShowSettingsUtil.getInstance().editConfigurable(
-                    toolWindowTree.project,
-                    JvmSearchGroupConfigurable(toolWindowTree.project, root.config, node.group)
-                )
             }
         })
         add(object : AnAction("New Tab", "", AllIcons.General.Add) {
