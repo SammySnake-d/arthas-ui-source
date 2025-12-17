@@ -18,6 +18,7 @@ import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
 import io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI
 import java.awt.BorderLayout
 import javax.swing.JPanel
+import com.intellij.execution.ExecutionException
 
 class ArthasRunConfiguration(
     project: Project,
