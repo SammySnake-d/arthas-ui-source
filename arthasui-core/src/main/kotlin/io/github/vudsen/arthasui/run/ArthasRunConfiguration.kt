@@ -61,7 +61,7 @@ class ArthasRunConfiguration(
         
         override fun getComponent() = wrapperPanel
         
-        override fun getPreferredFocusableComponent() = delegate.preferredFocusableComponent
+        override fun getPreferredFocusableComponent() = delegate.component
         
         override fun dispose() {
             if (delegate is Disposable) {
