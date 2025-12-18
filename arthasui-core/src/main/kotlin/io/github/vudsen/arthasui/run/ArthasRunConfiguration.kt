@@ -1,8 +1,8 @@
 package io.github.vudsen.arthasui.run
 
 import com.intellij.diagnostic.logging.LogConsoleManagerBase
-import com.intellij.execution.ExecutionConsole
 import com.intellij.execution.Executor
+import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.execution.configurations.*
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
