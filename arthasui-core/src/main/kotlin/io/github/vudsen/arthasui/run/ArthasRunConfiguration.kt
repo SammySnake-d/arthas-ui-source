@@ -11,10 +11,8 @@ import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.execution.ui.ConsoleViewPlace
 import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
-import io.github.vudsen.arthasui.api.ArthasExecutionManager
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
 import io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI
 import java.awt.BorderLayout
@@ -41,12 +39,6 @@ class ArthasRunConfiguration(
             override fun createConsole(executor: Executor): ConsoleView? {
                 val console = super.createConsole(executor) ?: return null
                 val banner = ConsoleCommandBanner(project, jvm, tabId, editorFileName)
-                
-                // 注册监听器到 template
-                service<ArthasExecutionManager>().getTemplate(jvm, tabId)?.let { template ->
-                    banner.registerListener(template)
-                }
-                
                 return BannerWrappedConsole(console, banner)
             }
         }

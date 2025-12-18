@@ -30,6 +30,8 @@ class ConsoleCommandBanner(
 
     private val infoPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), JBUI.scale(2)))
     private val waitingLabel = JLabel("等待执行命令...", SwingConstants.CENTER)
+    
+    private var listenerRegistered = false
 
     init {
         border = BorderFactory.createCompoundBorder(
@@ -49,12 +51,20 @@ class ConsoleCommandBanner(
         add(buttonPanel, BorderLayout.EAST)
         
         showWaiting()
+        
+        // 延迟注册监听器，避免在初始化时阻塞
+        SwingUtilities.invokeLater { tryRegisterListener() }
     }
     
     /**
-     * 注册监听器到指定的 template
+     * 尝试注册监听器到 template
      */
-    fun registerListener(template: ArthasBridgeTemplate) {
+    private fun tryRegisterListener() {
+        if (listenerRegistered) return
+        
+        val template = service<ArthasExecutionManager>().getTemplate(jvm, tabId) ?: return
+        
+        listenerRegistered = true
         template.addListener(object : ArthasBridgeListener() {
             override fun onFinish(command: String, result: ArthasResultItem, rawContent: String) {
                 ApplicationManager.getApplication().invokeLater {
