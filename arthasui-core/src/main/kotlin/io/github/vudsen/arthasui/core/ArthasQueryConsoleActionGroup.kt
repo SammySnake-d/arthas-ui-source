@@ -23,6 +23,7 @@ import io.github.vudsen.arthasui.common.util.ProgressIndicatorStack
 import io.github.vudsen.arthasui.core.ui.ExecutionGutterIconRenderer
 import io.github.vudsen.arthasui.run.ArthasConfigurationType
 import io.github.vudsen.arthasui.run.ArthasProcessOptions
+import io.github.vudsen.arthasui.run.CommandNameGenerator
 
 /**
  * Arthas Query Console header actions group.
@@ -121,7 +122,10 @@ class ArthasQueryConsoleActionGroup(
                 ProgressIndicatorStack.push(indicator)
                 val coordinator = project.getService(ArthasExecutionManager::class.java)
                 val tabId = virtualFileAttributes.tabId
-                val displayName = virtualFileAttributes.displayName ?: virtualFileAttributes.jvm.name
+                
+                // 根据命令生成简短的显示名称
+                val commandName = CommandNameGenerator.generate(selected)
+                val displayName = "$commandName (${virtualFileAttributes.jvm.name})"
                 
                 coordinator.getTemplate(virtualFileAttributes.jvm, tabId) ?.let {
                     it.execute(selected)
