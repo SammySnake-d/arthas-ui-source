@@ -26,68 +26,24 @@ class ArthasRunConfiguration(
     RunConfigurationBase<ArthasProcessOptions>(project, configurationFactory, "Arthas Query Console") {
 
     override fun getState(executor: Executor, environment: ExecutionEnvironment): RunProfileState {
+        val options = state
         return object : CommandLineState(environment) {
             override fun startProcess(): ProcessHandler {
                 return ArthasProcessHandler(
                     project,
-                    state.jvm,
-                    state.tabId,
-                    state.displayName
+                    options.jvm,
+                    options.tabId,
+                    options.displayName
                 )
             }
             
             override fun createConsole(executor: Executor): ConsoleView? {
                 val console = super.createConsole(executor) ?: return null
-                
-                // Create a wrapper panel with the banner at the top
-                // 创建一个包含横幅的包装面板，横幅显示在控制台上方
-                val displayName = state.displayName ?: state.jvm.name
-                val banner = ConsoleCommandBanner(project, state.jvm, state.tabId, displayName)
-                
+                val displayName = options.displayName ?: options.jvm.name
+                val banner = ConsoleCommandBanner(project, options.jvm, options.tabId, displayName)
                 return BannerWrappedConsole(console, banner)
             }
         }
-    }
-    
-    /**
-     * Wrapper class for ConsoleView that adds a banner at the top.
-     * 包装器类，在控制台顶部添加横幅。
-     */
-    private class BannerWrappedConsole(
-        private val delegate: ConsoleView,
-        banner: ConsoleCommandBanner
-    ) : ConsoleView {
-        
-        private val wrapperPanel = JPanel(BorderLayout()).apply {
-            add(banner, BorderLayout.NORTH)
-            add(delegate.component, BorderLayout.CENTER)
-        }
-        
-        // ComponentContainer methods
-        override fun getComponent(): JComponent = wrapperPanel
-        override fun getPreferredFocusableComponent(): JComponent = delegate.preferredFocusableComponent
-        
-        // Disposable method
-        override fun dispose() = delegate.dispose()
-        
-        // ConsoleView methods - delegate all to the wrapped console
-        override fun print(text: String, contentType: ConsoleViewContentType) = delegate.print(text, contentType)
-        override fun clear() = delegate.clear()
-        override fun scrollTo(offset: Int) = delegate.scrollTo(offset)
-        override fun attachToProcess(processHandler: ProcessHandler) = delegate.attachToProcess(processHandler)
-        override fun setOutputPaused(value: Boolean) = delegate.setOutputPaused(value)
-        override fun isOutputPaused(): Boolean = delegate.isOutputPaused
-        override fun hasDeferredOutput(): Boolean = delegate.hasDeferredOutput()
-        override fun performWhenNoDeferredOutput(runnable: Runnable) = delegate.performWhenNoDeferredOutput(runnable)
-        override fun setHelpId(helpId: String) = delegate.setHelpId(helpId)
-        override fun addMessageFilter(filter: Filter) = delegate.addMessageFilter(filter)
-        override fun printHyperlink(hyperlinkText: String, info: HyperlinkInfo?) = delegate.printHyperlink(hyperlinkText, info)
-        override fun getContentSize(): Int = delegate.contentSize
-        override fun canPause(): Boolean = delegate.canPause()
-        override fun createConsoleActions(): Array<AnAction> = delegate.createConsoleActions()
-        override fun allowHeavyFilters() = delegate.allowHeavyFilters()
-        override fun getPlace(): ConsoleViewPlace = delegate.place
-        override fun requestScrollingToEnd() = delegate.requestScrollingToEnd()
     }
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> {
@@ -109,7 +65,47 @@ class ArthasRunConfiguration(
         if (manager is LogConsoleManagerBase) {
             manager.addAdditionalTabComponent(ExecuteHistoryUI(project, state.jvm, state.tabId), "io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI", null, false)
         }
-
     }
-
+    
+    /**
+     * 包装 ConsoleView，在顶部添加横幅
+     */
+    private class BannerWrappedConsole(
+        private val delegate: ConsoleView,
+        private val banner: ConsoleCommandBanner
+    ) : ConsoleView {
+        
+        private val wrapperPanel: JPanel by lazy {
+            JPanel(BorderLayout()).apply {
+                add(banner, BorderLayout.NORTH)
+                add(delegate.component, BorderLayout.CENTER)
+            }
+        }
+        
+        // === ComponentContainer ===
+        override fun getComponent(): JComponent = wrapperPanel
+        override fun getPreferredFocusableComponent(): JComponent = delegate.preferredFocusableComponent
+        
+        // === Disposable ===
+        override fun dispose() = delegate.dispose()
+        
+        // === ConsoleView ===
+        override fun print(text: String, contentType: ConsoleViewContentType) = delegate.print(text, contentType)
+        override fun clear() = delegate.clear()
+        override fun scrollTo(offset: Int) = delegate.scrollTo(offset)
+        override fun attachToProcess(processHandler: ProcessHandler) = delegate.attachToProcess(processHandler)
+        override fun setOutputPaused(value: Boolean) { delegate.isOutputPaused = value }
+        override fun isOutputPaused(): Boolean = delegate.isOutputPaused
+        override fun hasDeferredOutput(): Boolean = delegate.hasDeferredOutput()
+        override fun performWhenNoDeferredOutput(runnable: Runnable) = delegate.performWhenNoDeferredOutput(runnable)
+        override fun setHelpId(helpId: String) = delegate.setHelpId(helpId)
+        override fun addMessageFilter(filter: Filter) = delegate.addMessageFilter(filter)
+        override fun printHyperlink(hyperlinkText: String, info: HyperlinkInfo?) = delegate.printHyperlink(hyperlinkText, info)
+        override fun getContentSize(): Int = delegate.contentSize
+        override fun canPause(): Boolean = delegate.canPause()
+        override fun createConsoleActions(): Array<AnAction> = delegate.createConsoleActions()
+        override fun allowHeavyFilters() = delegate.allowHeavyFilters()
+        override fun getPlace(): ConsoleViewPlace = delegate.place
+        override fun requestScrollingToEnd() = delegate.requestScrollingToEnd()
+    }
 }
