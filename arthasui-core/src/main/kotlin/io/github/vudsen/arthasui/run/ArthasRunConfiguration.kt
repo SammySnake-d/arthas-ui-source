@@ -1,18 +1,18 @@
 package io.github.vudsen.arthasui.run
 
 import com.intellij.diagnostic.logging.LogConsoleManagerBase
+import com.intellij.execution.ExecutionConsole
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.*
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
-import com.intellij.execution.ui.ConsoleView
-import com.intellij.execution.ui.ConsoleViewWrapper
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
+import io.github.vudsen.arthasui.api.JVM
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
 import io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI
+import io.github.vudsen.arthasui.run.ui.ExecuteOperationPanel
 import java.awt.BorderLayout
-import javax.swing.JComponent
 import javax.swing.JPanel
 
 class ArthasRunConfiguration(
@@ -28,6 +28,7 @@ class ArthasRunConfiguration(
         executor: Executor,
         environment: ExecutionEnvironment
     ): RunProfileState {
+
         return object : CommandLineState(environment) {
 
             override fun startProcess(): ProcessHandler {
@@ -39,10 +40,11 @@ class ArthasRunConfiguration(
                 )
             }
 
-            override fun createConsole(executor: Executor): ConsoleView? {
+            override fun createConsole(executor: Executor): ExecutionConsole? {
                 val console = super.createConsole(executor) ?: return null
 
                 val displayName = state.displayName ?: state.jvm.name
+
                 val banner = ConsoleCommandBanner(
                     project,
                     state.jvm,
@@ -50,31 +52,44 @@ class ArthasRunConfiguration(
                     displayName
                 )
 
-                return BannerWrappedConsole(console, banner)
+                val operationPanel = ExecuteOperationPanel(
+                    project,
+                    state.jvm,
+                    state.tabId
+                )
+
+                return CompositeConsole(
+                    delegate = console,
+                    banner = banner,
+                    operationPanel = operationPanel
+                )
             }
         }
     }
 
     /**
-     * ✅ 官方推荐方式：
-     * - 继承 ConsoleViewWrapper
-     * - 不碰 Console 行为
-     * - 只改 UI
+     * 顶部 Banner + 右侧操作区 + Console 的复合控制台
      */
-    private class BannerWrappedConsole(
-        delegate: ConsoleView,
-        banner: JComponent
-    ) : ConsoleViewWrapper(delegate) {
+    private class CompositeConsole(
+        private val delegate: ExecutionConsole,
+        banner: JPanel,
+        operationPanel: JPanel
+    ) : ExecutionConsole {
 
-        private val wrapperPanel = JPanel(BorderLayout()).apply {
+        private val rootPanel = JPanel(BorderLayout()).apply {
             add(banner, BorderLayout.NORTH)
+            add(operationPanel, BorderLayout.EAST)
             add(delegate.component, BorderLayout.CENTER)
         }
 
-        override fun getComponent(): JComponent = wrapperPanel
+        override fun getComponent() = rootPanel
 
-        override fun getPreferredFocusableComponent(): JComponent? =
+        override fun getPreferredFocusableComponent() =
             delegate.preferredFocusableComponent
+
+        override fun dispose() {
+            delegate.dispose()
+        }
     }
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> {
@@ -82,8 +97,7 @@ class ArthasRunConfiguration(
     }
 
     override fun getState(): ArthasProcessOptions {
-        return super.getState()
-            ?: error("ArthasRunConfiguration state is missing")
+        return super.getState()!!
     }
 
     override fun createAdditionalTabComponents(
