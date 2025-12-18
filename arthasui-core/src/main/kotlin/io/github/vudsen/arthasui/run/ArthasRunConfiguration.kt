@@ -2,16 +2,21 @@ package io.github.vudsen.arthasui.run
 
 import com.intellij.diagnostic.logging.LogConsoleManagerBase
 import com.intellij.execution.Executor
-import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.execution.configurations.*
+import com.intellij.execution.filters.Filter
+import com.intellij.execution.filters.HyperlinkInfo
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.execution.ui.ConsoleView
+import com.intellij.execution.ui.ConsoleViewContentType
+import com.intellij.execution.ui.ConsoleViewPlace
+import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
-import io.github.vudsen.arthasui.api.JVM
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
 import io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI
 import java.awt.BorderLayout
+import javax.swing.JComponent
 import javax.swing.JPanel
 
 class ArthasRunConfiguration(
@@ -31,7 +36,7 @@ class ArthasRunConfiguration(
                 )
             }
             
-            override fun createConsole(executor: Executor): ExecutionConsole? {
+            override fun createConsole(executor: Executor): ConsoleView? {
                 val console = super.createConsole(executor) ?: return null
                 
                 // Create a wrapper panel with the banner at the top
@@ -45,24 +50,44 @@ class ArthasRunConfiguration(
     }
     
     /**
-     * Wrapper class for ExecutionConsole that adds a banner at the top.
+     * Wrapper class for ConsoleView that adds a banner at the top.
      * 包装器类，在控制台顶部添加横幅。
      */
     private class BannerWrappedConsole(
-        private val delegate: ExecutionConsole,
+        private val delegate: ConsoleView,
         banner: ConsoleCommandBanner
-    ) : ExecutionConsole {
+    ) : ConsoleView {
         
         private val wrapperPanel = JPanel(BorderLayout()).apply {
             add(banner, BorderLayout.NORTH)
             add(delegate.component, BorderLayout.CENTER)
         }
         
-        override fun getComponent() = wrapperPanel
+        // ComponentContainer methods
+        override fun getComponent(): JComponent = wrapperPanel
+        override fun getPreferredFocusableComponent(): JComponent = delegate.preferredFocusableComponent
         
-        override fun getPreferredFocusableComponent() = delegate.preferredFocusableComponent
-        
+        // Disposable method
         override fun dispose() = delegate.dispose()
+        
+        // ConsoleView methods - delegate all to the wrapped console
+        override fun print(text: String, contentType: ConsoleViewContentType) = delegate.print(text, contentType)
+        override fun clear() = delegate.clear()
+        override fun scrollTo(offset: Int) = delegate.scrollTo(offset)
+        override fun attachToProcess(processHandler: ProcessHandler) = delegate.attachToProcess(processHandler)
+        override fun setOutputPaused(value: Boolean) = delegate.setOutputPaused(value)
+        override fun isOutputPaused(): Boolean = delegate.isOutputPaused
+        override fun hasDeferredOutput(): Boolean = delegate.hasDeferredOutput()
+        override fun performWhenNoDeferredOutput(runnable: Runnable) = delegate.performWhenNoDeferredOutput(runnable)
+        override fun setHelpId(helpId: String) = delegate.setHelpId(helpId)
+        override fun addMessageFilter(filter: Filter) = delegate.addMessageFilter(filter)
+        override fun printHyperlink(hyperlinkText: String, info: HyperlinkInfo?) = delegate.printHyperlink(hyperlinkText, info)
+        override fun getContentSize(): Int = delegate.contentSize
+        override fun canPause(): Boolean = delegate.canPause()
+        override fun createConsoleActions(): Array<AnAction> = delegate.createConsoleActions()
+        override fun allowHeavyFilters() = delegate.allowHeavyFilters()
+        override fun getPlace(): ConsoleViewPlace = delegate.place
+        override fun requestScrollingToEnd() = delegate.requestScrollingToEnd()
     }
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> {
