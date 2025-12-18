@@ -7,7 +7,10 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
-import io.github.vudsen.arthasui.api.*
+import io.github.vudsen.arthasui.api.ArthasBridgeListener
+import io.github.vudsen.arthasui.api.ArthasExecutionManager
+import io.github.vudsen.arthasui.api.ArthasResultItem
+import io.github.vudsen.arthasui.api.JVM
 import io.github.vudsen.arthasui.language.arthas.psi.ArthasFileType
 import java.awt.BorderLayout
 import java.awt.Cursor
@@ -28,6 +31,10 @@ class ConsoleCommandBanner(
     private val tabId: String?,
     private val editorFileName: String
 ) : JPanel(BorderLayout()) {
+    
+    // 获取项目级别的 ArthasExecutionManager 服务
+    private val executionManager: ArthasExecutionManager
+        get() = project.service()
 
     private val infoPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), JBUI.scale(2)))
     private val waitingLabel = JLabel("等待执行命令...", SwingConstants.CENTER)
@@ -63,7 +70,7 @@ class ConsoleCommandBanner(
     private fun tryRegisterListener() {
         if (listenerRegistered) return
         
-        val template = service<ArthasExecutionManager>().getTemplate(jvm, tabId) ?: return
+        val template = executionManager.getTemplate(jvm, tabId) ?: return
         
         listenerRegistered = true
         
@@ -72,7 +79,7 @@ class ConsoleCommandBanner(
         template.addListener(object : ArthasBridgeListener() {
             override fun onContent(result: String) {
                 // 当收到内容时，检查是否有新命令正在执行
-                val currentCommand = service<ArthasExecutionManager>().getCurrentCommand(jvm, tabId)
+                val currentCommand = executionManager.getCurrentCommand(jvm, tabId)
                 if (currentCommand != null && currentCommand != lastDisplayedCommand) {
                     lastDisplayedCommand = currentCommand
                     ApplicationManager.getApplication().invokeLater {
@@ -126,34 +133,22 @@ class ConsoleCommandBanner(
      * 通过取消 ProgressIndicator 来中断命令执行，效果与点击后台任务条的取消按钮相同
      */
     private fun stopCurrentCommand() {
-        service<ArthasExecutionManager>().cancelCurrentCommand(jvm, tabId)
+        executionManager.cancelCurrentCommand(jvm, tabId)
     }
     
     /**
-     * 创建跳转按钮
+     * 创建跳转按钮 - 显示绑定的 tab 名称，使用官方跳转图标
      */
     private fun createNavigateButton(): JLabel {
-        return JLabel("跳转到编辑器", AllIcons.Actions.EditSource, SwingConstants.LEFT).apply {
-            toolTipText = "点击跳转到查询编辑器"
+        // 显示 tab 名称，让用户知道控制台绑定了哪个 tab
+        return JLabel(editorFileName, AllIcons.General.Locate, SwingConstants.LEFT).apply {
+            toolTipText = "跳转到查询编辑器: $editorFileName"
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-            border = BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(JBColor.border(), 1),
-                BorderFactory.createEmptyBorder(JBUI.scale(2), JBUI.scale(6), JBUI.scale(2), JBUI.scale(6))
-            )
-            background = JBColor(0xE8E8E8, 0x4A4A4A)
-            isOpaque = true
+            border = BorderFactory.createEmptyBorder(JBUI.scale(2), JBUI.scale(4), JBUI.scale(2), JBUI.scale(4))
             
             addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
                     navigateToQueryEditor()
-                }
-                
-                override fun mouseEntered(e: MouseEvent) {
-                    background = JBColor(0xD8D8D8, 0x555555)
-                }
-                
-                override fun mouseExited(e: MouseEvent) {
-                    background = JBColor(0xE8E8E8, 0x4A4A4A)
                 }
             })
         }
