@@ -139,12 +139,19 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
     private val currentCommands = ConcurrentHashMap<BridgeKey, String>()
 
     /**
+     * 命令完成监听器
+     */
+    private val commandFinishListeners = ConcurrentHashMap<BridgeKey, MutableList<(String?) -> Unit>>()
+
+    /**
      * 设置当前正在执行的命令
      */
     override fun setCurrentCommand(jvm: JVM, tabId: String?, command: String?) {
         val key = createKey(jvm, tabId)
         if (command == null) {
-            currentCommands.remove(key)
+            val lastCommand = currentCommands.remove(key)
+            // 通知所有监听器命令已完成
+            notifyCommandFinish(key, lastCommand)
         } else {
             currentCommands[key] = command
         }
@@ -156,6 +163,35 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
     override fun getCurrentCommand(jvm: JVM, tabId: String?): String? {
         val key = createKey(jvm, tabId)
         return currentCommands[key]
+    }
+
+    /**
+     * 添加命令完成监听器
+     */
+    override fun addCommandFinishListener(jvm: JVM, tabId: String?, listener: (String?) -> Unit) {
+        val key = createKey(jvm, tabId)
+        commandFinishListeners.computeIfAbsent(key) { mutableListOf() }.add(listener)
+    }
+
+    /**
+     * 移除命令完成监听器
+     */
+    override fun removeCommandFinishListener(jvm: JVM, tabId: String?, listener: (String?) -> Unit) {
+        val key = createKey(jvm, tabId)
+        commandFinishListeners[key]?.remove(listener)
+    }
+
+    /**
+     * 通知命令完成
+     */
+    private fun notifyCommandFinish(key: BridgeKey, lastCommand: String?) {
+        commandFinishListeners[key]?.forEach { listener ->
+            try {
+                listener(lastCommand)
+            } catch (e: Exception) {
+                log.warn("Error notifying command finish listener", e)
+            }
+        }
     }
 
 }

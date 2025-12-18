@@ -67,4 +67,17 @@ interface ArthasExecutionManager {
      */
     fun getCurrentCommand(jvm: JVM, tabId: String?): String?
 
+    /**
+     * 添加命令完成监听器（包括正常完成、错误、取消）
+     * @param jvm JVM instance
+     * @param tabId Unique identifier for the tab
+     * @param listener 当命令完成时调用的回调，参数为最后执行的命令
+     */
+    fun addCommandFinishListener(jvm: JVM, tabId: String?, listener: (String?) -> Unit)
+
+    /**
+     * 移除命令完成监听器
+     */
+    fun removeCommandFinishListener(jvm: JVM, tabId: String?, listener: (String?) -> Unit)
+
 }
