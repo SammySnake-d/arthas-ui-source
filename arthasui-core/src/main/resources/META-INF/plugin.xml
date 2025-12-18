@@ -75,6 +75,10 @@
         <applicationService serviceImplementation="io.github.vudsen.arthasui.bridge.util.JvmProviderConfigConfigConverterImpl"
                             serviceInterface="io.github.vudsen.arthasui.api.conf.JvmProviderConfigConfigConverter"/>
 
+        <applicationService serviceImplementation="io.github.vudsen.arthasui.api.conf.ArthasHistoryPersistent"/>
+
+        <projectService serviceImplementation="io.github.vudsen.arthasui.core.ArthasHistoryService"/>
+
         <iconMapper mappingFile="ArthasUIIconMappings.json"/>
     </extensions>
 

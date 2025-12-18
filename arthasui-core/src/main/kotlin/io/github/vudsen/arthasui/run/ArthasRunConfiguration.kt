@@ -15,6 +15,7 @@ import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
 import io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI
+import io.github.vudsen.arthasui.run.ui.TimeTunnelUI
 import java.awt.BorderLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -61,9 +62,19 @@ class ArthasRunConfiguration(
         startedProcess: ProcessHandler
     ) {
         if (manager is LogConsoleManagerBase) {
+            // Add ExecuteHistoryUI tab
             manager.addAdditionalTabComponent(
                 ExecuteHistoryUI(project, state.jvm, state.tabId),
                 "io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI",
+                null,
+                false
+            )
+            
+            // Add TimeTunnelUI tab
+            // Requirements: 1.1 - WHEN the Arthas console is opened THEN the ArthasUI SHALL display a "TimeTunnel" tab alongside the existing "History" tab
+            manager.addAdditionalTabComponent(
+                TimeTunnelUI(project, state.jvm, state.tabId),
+                "io.github.vudsen.arthasui.run.ui.TimeTunnelUI",
                 null,
                 false
             )
