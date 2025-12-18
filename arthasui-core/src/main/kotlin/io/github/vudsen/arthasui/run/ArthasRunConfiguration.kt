@@ -1,12 +1,11 @@
 package io.github.vudsen.arthasui.run
 
 import com.intellij.diagnostic.logging.LogConsoleManagerBase
-import com.intellij.execution.ExecutionConsole
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.*
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
-import com.intellij.openapi.Disposable
+import com.intellij.execution.ui.ConsoleView
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
@@ -40,11 +39,10 @@ class ArthasRunConfiguration(
             }
 
             /**
-             * ⚠️ 关键点：
-             * - 返回 ExecutionConsole
-             * - 不改变 Console 类型语义
+             * ⚠️ 新 SDK 下只能返回 ConsoleView
+             * 但我们只包 UI，不做代理
              */
-            override fun createConsole(executor: Executor): ExecutionConsole? {
+            override fun createConsole(executor: Executor): ConsoleView? {
                 val console = super.createConsole(executor) ?: return null
 
                 val displayName = state.displayName ?: state.jvm.name
@@ -61,14 +59,17 @@ class ArthasRunConfiguration(
     }
 
     /**
-     * UI 包装器（只包 UI，不干预 Console 行为）
+     * ⚠️ 关键点：
+     * - 实现 ConsoleView
+     * - 不使用 by delegate
+     * - 所有行为直接转发
      */
     private class BannerWrappedConsole(
-        private val delegate: ExecutionConsole,
+        private val delegate: ConsoleView,
         private val banner: JComponent
-    ) : ExecutionConsole, Disposable {
+    ) : ConsoleView {
 
-        private val wrapperPanel: JPanel = JPanel(BorderLayout()).apply {
+        private val wrapperPanel = JPanel(BorderLayout()).apply {
             add(banner, BorderLayout.NORTH)
             add(delegate.component, BorderLayout.CENTER)
         }
@@ -78,10 +79,50 @@ class ArthasRunConfiguration(
         override fun getPreferredFocusableComponent(): JComponent? =
             delegate.preferredFocusableComponent
 
-        /**
-         * ⚠️ 不要额外 dispose delegate
-         * IDE 会统一管理 Console 生命周期
-         */
+        // === 行为完全转发，保证 Console 正常工作 ===
+
+        override fun print(text: String, contentType: com.intellij.execution.ui.ConsoleViewContentType) {
+            delegate.print(text, contentType)
+        }
+
+        override fun clear() {
+            delegate.clear()
+        }
+
+        override fun scrollToEnd() {
+            delegate.scrollToEnd()
+        }
+
+        override fun attachToProcess(processHandler: ProcessHandler) {
+            delegate.attachToProcess(processHandler)
+        }
+
+        override fun setOutputPaused(value: Boolean) {
+            delegate.isOutputPaused = value
+        }
+
+        override fun isOutputPaused(): Boolean =
+            delegate.isOutputPaused
+
+        override fun hasDeferredOutput(): Boolean =
+            delegate.hasDeferredOutput()
+
+        override fun performWhenNoDeferredOutput(runnable: Runnable) {
+            delegate.performWhenNoDeferredOutput(runnable)
+        }
+
+        override fun setHelpId(helpId: String) {
+            delegate.setHelpId(helpId)
+        }
+
+        override fun addMessageFilter(filter: com.intellij.execution.filters.Filter) {
+            delegate.addMessageFilter(filter)
+        }
+
+        override fun printHyperlink(text: String, info: com.intellij.execution.filters.HyperlinkInfo?) {
+            delegate.printHyperlink(text, info)
+        }
+
         override fun dispose() {
             delegate.dispose()
         }
@@ -91,20 +132,11 @@ class ArthasRunConfiguration(
         return ArthasSettingsEditor()
     }
 
-    override fun createRunnerSettings(
-        provider: ConfigurationInfoProvider?
-    ): ConfigurationPerRunnerSettings? {
-        return super.createRunnerSettings(provider)
-    }
-
     override fun getState(): ArthasProcessOptions {
         return super.getState()
             ?: error("ArthasRunConfiguration state is missing")
     }
 
-    /**
-     * 追加 History Tab（这是 A 中本来就可行的逻辑）
-     */
     override fun createAdditionalTabComponents(
         manager: AdditionalTabComponentManager,
         startedProcess: ProcessHandler
