@@ -53,33 +53,18 @@ class ConsoleCommandBanner(
         
         showWaiting()
         
-        // 延迟注册监听器，使用定时器重试直到 template 可用
-        scheduleListenerRegistration()
+        // 延迟注册监听器，避免在初始化时阻塞
+        SwingUtilities.invokeLater { tryRegisterListener() }
     }
     
     /**
-     * 调度监听器注册，如果 template 还不可用则重试
+     * 尝试注册监听器到 template
      */
-    private fun scheduleListenerRegistration() {
+    private fun tryRegisterListener() {
         if (listenerRegistered) return
         
-        val template = service<ArthasExecutionManager>().getTemplate(jvm, tabId)
-        if (template != null) {
-            registerListener(template)
-        } else {
-            // template 还没准备好，500ms 后重试
-            Timer(500) { scheduleListenerRegistration() }.apply {
-                isRepeats = false
-                start()
-            }
-        }
-    }
-    
-    /**
-     * 注册监听器到 template
-     */
-    private fun registerListener(template: ArthasBridgeTemplate) {
-        if (listenerRegistered) return
+        val template = service<ArthasExecutionManager>().getTemplate(jvm, tabId) ?: return
+        
         listenerRegistered = true
         
         var lastDisplayedCommand: String? = null
