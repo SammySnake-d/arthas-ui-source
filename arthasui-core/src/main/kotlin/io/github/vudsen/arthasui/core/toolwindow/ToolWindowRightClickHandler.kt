@@ -118,12 +118,22 @@ class ToolWindowRightClickHandler(private val toolWindowTree: ToolWindowTree) : 
 
             override fun actionPerformed(evt: AnActionEvent) {
                 val jvmNode = resolveJvmNode() ?: return
-                // 直接使用默认名称创建 tab，不需要用户输入
                 val defaultName = jvmNode.nextTabName()
-                when (jvmNode.addTab(defaultName)) {
-                    AddTabResult.EMPTY, AddTabResult.DUPLICATE -> {
-                        // 理论上不会发生，因为 nextTabName() 保证唯一
-                        Messages.showWarningDialog(toolWindowTree.project, "Failed to create tab.", "Cannot Create Tab")
+                val tabName = Messages.showInputDialog(
+                    toolWindowTree.project,
+                    "Enter tab name",
+                    "New Tab",
+                    null,
+                    defaultName,
+                    null
+                ) ?: return
+                when (jvmNode.addTab(tabName)) {
+                    AddTabResult.EMPTY -> {
+                        Messages.showWarningDialog(toolWindowTree.project, "Tab name cannot be empty.", "Cannot Create Tab")
+                        return
+                    }
+                    AddTabResult.DUPLICATE -> {
+                        Messages.showWarningDialog(toolWindowTree.project, "Tab name already exists.", "Cannot Create Tab")
                         return
                     }
                     AddTabResult.SUCCESS -> {
