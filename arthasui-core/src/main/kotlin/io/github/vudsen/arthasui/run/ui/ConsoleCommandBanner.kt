@@ -41,6 +41,7 @@ class ConsoleCommandBanner(
     private var listenerRegistered = false
     private lateinit var stopButton: JLabel
     private var isRunning = false
+    private var busyCheckTimer: Timer? = null
 
     init {
         border = BorderFactory.createCompoundBorder(
@@ -71,44 +72,81 @@ class ConsoleCommandBanner(
         val template = executionManager.getTemplate(jvm, tabId) ?: return
         listenerRegistered = true
         
-        var currentRunningCommand: String? = null
-        var hasShownRunning = false
+        var currentDisplayedCommand: String? = null
         
         template.addListener(object : ArthasBridgeListener() {
             override fun onContent(result: String) {
-                // 只在命令开始时（第一次收到内容）更新显示
-                // 使用 template.isBusy() 来判断是否真的在执行命令
-                if (!hasShownRunning && template.isBusy()) {
+                // 当收到内容且 template 正在忙碌时，启动状态检查
+                if (template.isBusy() && !isRunning) {
                     val cmd = executionManager.getCurrentCommand(jvm, tabId)
-                    if (cmd != null && cmd != currentRunningCommand) {
-                        currentRunningCommand = cmd
-                        hasShownRunning = true
+                    if (cmd != null) {
+                        currentDisplayedCommand = cmd
                         ApplicationManager.getApplication().invokeLater {
                             updateStopButtonState(true)
                             updateDisplay(cmd)
+                            startBusyCheck(template, currentDisplayedCommand)
                         }
                     }
                 }
             }
             
             override fun onFinish(command: String, result: ArthasResultItem, rawContent: String) {
-                currentRunningCommand = command
-                hasShownRunning = false
+                currentDisplayedCommand = command
                 ApplicationManager.getApplication().invokeLater {
+                    stopBusyCheck()
                     updateStopButtonState(false)
                     updateDisplay(command)
                 }
             }
 
             override fun onError(command: String, rawContent: String, exception: Exception) {
-                currentRunningCommand = command
-                hasShownRunning = false
+                currentDisplayedCommand = command
                 ApplicationManager.getApplication().invokeLater {
+                    stopBusyCheck()
                     updateStopButtonState(false)
                     updateDisplay(command)
                 }
             }
         })
+    }
+    
+    /**
+     * 启动定时器检查 template 是否还在忙碌
+     * 用于检测命令被取消的情况（取消时不会触发 onFinish/onError）
+     * 
+     * 检测逻辑：
+     * 1. template.isBusy() 变为 false - 命令执行完毕或被取消
+     * 2. getCurrentCommand() 返回 null - 任务已清理完毕
+     */
+    private fun startBusyCheck(template: io.github.vudsen.arthasui.api.ArthasBridgeTemplate, displayedCommand: String?) {
+        stopBusyCheck()
+        busyCheckTimer = Timer(100) {
+            // 检查两个条件：template 不再忙碌，或者当前命令已被清除
+            val templateNotBusy = !template.isBusy()
+            val commandCleared = executionManager.getCurrentCommand(jvm, tabId) == null
+            
+            if ((templateNotBusy || commandCleared) && isRunning) {
+                ApplicationManager.getApplication().invokeLater {
+                    stopBusyCheck()
+                    updateStopButtonState(false)
+                    // 保持显示最后执行的命令
+                    if (displayedCommand != null) {
+                        updateDisplay(displayedCommand)
+                    }
+                }
+            }
+        }.apply {
+            isRepeats = true
+            start()
+        }
+    }
+    
+    /**
+     * 停止忙碌状态检查定时器
+     */
+    private fun stopBusyCheck() {
+        busyCheckTimer?.stop()
+        busyCheckTimer = null
     }
     
     private fun showWaiting() {
