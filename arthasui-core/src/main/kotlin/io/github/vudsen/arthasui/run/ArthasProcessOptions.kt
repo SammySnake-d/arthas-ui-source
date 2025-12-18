@@ -16,7 +16,12 @@ class ArthasProcessOptions : RunConfigurationOptions() {
     var tabId: String? = null
     
     /**
-     * Display name for the console window, typically the tab name.
+     * Display name for the console window (shown in Run tool window tab).
      */
     var displayName: String? = null
+    
+    /**
+     * Editor file name for navigation (the name of the query editor file).
+     */
+    var editorFileName: String? = null
 }

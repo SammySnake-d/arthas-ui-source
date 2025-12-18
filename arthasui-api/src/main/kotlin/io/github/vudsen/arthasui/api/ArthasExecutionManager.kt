@@ -35,5 +35,20 @@ interface ArthasExecutionManager {
      */
     fun getTemplate(jvm: JVM, tabId: String? = null): ArthasBridgeTemplate?
 
+    /**
+     * 设置当前正在执行命令的 ProgressIndicator
+     * @param jvm JVM instance
+     * @param tabId Unique identifier for the tab
+     * @param indicator The progress indicator to store, null to clear
+     */
+    fun setCurrentIndicator(jvm: JVM, tabId: String?, indicator: ProgressIndicator?)
+
+    /**
+     * 取消当前正在执行的命令
+     * @param jvm JVM instance
+     * @param tabId Unique identifier for the tab
+     * @return true if a command was cancelled, false if no command was running
+     */
+    fun cancelCurrentCommand(jvm: JVM, tabId: String?): Boolean
 
 }

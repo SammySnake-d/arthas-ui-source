@@ -7,44 +7,29 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
-import io.github.vudsen.arthasui.api.ArthasBridgeListener
-import io.github.vudsen.arthasui.api.ArthasExecutionManager
-import io.github.vudsen.arthasui.api.ArthasResultItem
-import io.github.vudsen.arthasui.api.JVM
+import io.github.vudsen.arthasui.api.*
 import io.github.vudsen.arthasui.language.arthas.psi.ArthasFileType
-import java.awt.BorderLayout
-import java.awt.Cursor
-import java.awt.FlowLayout
+import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import javax.swing.BorderFactory
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.SwingConstants
-import javax.swing.SwingUtilities
+import java.awt.geom.RoundRectangle2D
+import javax.swing.*
 
 /**
  * 控制台命令信息横幅面板。
  * 
  * 显示当前执行命令的解析信息（命令类型、类名、方法名、OGNL表达式等），
  * 以"描述: 值"的格式展示在控制台上方。
- * 
- * 功能：
- * 1. 解析并显示 Arthas 命令的关键参数
- * 2. 提供"跳转到编辑器"按钮，快速定位到执行命令的窗口
- * 3. 实时更新命令执行状态
  */
 class ConsoleCommandBanner(
     private val project: Project,
     private val jvm: JVM,
     private val tabId: String?,
-    private val displayName: String
+    private val editorFileName: String
 ) : JPanel(BorderLayout()) {
 
     private val infoPanel = JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), JBUI.scale(2)))
     private val waitingLabel = JLabel("等待执行命令...", SwingConstants.CENTER)
-    
-    private var listenerRegistered = false
 
     init {
         border = BorderFactory.createCompoundBorder(
@@ -54,12 +39,35 @@ class ConsoleCommandBanner(
         background = JBColor(0xF7F7F7, 0x3C3F41)
 
         add(infoPanel, BorderLayout.CENTER)
-        add(createNavigateButton(), BorderLayout.EAST)
+        
+        // 右侧按钮面板：终止按钮 + 跳转按钮
+        val buttonPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
+            isOpaque = false
+            add(createStopButton())
+            add(createNavigateButton())
+        }
+        add(buttonPanel, BorderLayout.EAST)
         
         showWaiting()
-        
-        // 延迟注册监听器，避免在初始化时阻塞
-        SwingUtilities.invokeLater { tryRegisterListener() }
+    }
+    
+    /**
+     * 注册监听器到指定的 template
+     */
+    fun registerListener(template: ArthasBridgeTemplate) {
+        template.addListener(object : ArthasBridgeListener() {
+            override fun onFinish(command: String, result: ArthasResultItem, rawContent: String) {
+                ApplicationManager.getApplication().invokeLater {
+                    updateDisplay(command, isError = false)
+                }
+            }
+
+            override fun onError(command: String, rawContent: String, exception: Exception) {
+                ApplicationManager.getApplication().invokeLater {
+                    updateDisplay(command, isError = true)
+                }
+            }
+        })
     }
     
     private fun showWaiting() {
@@ -70,7 +78,22 @@ class ConsoleCommandBanner(
     }
     
     /**
-     * 创建跳转按钮，点击后跳转到对应的查询编辑器窗口
+     * 创建终止按钮 - 红色圆角方形，类似 IDE 的停止按钮
+     */
+    private fun createStopButton(): JComponent {
+        return StopButton { stopCurrentCommand() }
+    }
+    
+    /**
+     * 终止当前正在执行的命令
+     * 通过取消 ProgressIndicator 来中断命令执行，效果与点击后台任务条的取消按钮相同
+     */
+    private fun stopCurrentCommand() {
+        service<ArthasExecutionManager>().cancelCurrentCommand(jvm, tabId)
+    }
+    
+    /**
+     * 创建跳转按钮
      */
     private fun createNavigateButton(): JLabel {
         return JLabel("跳转到编辑器", AllIcons.Actions.EditSource, SwingConstants.LEFT).apply {
@@ -105,34 +128,10 @@ class ConsoleCommandBanner(
     private fun navigateToQueryEditor() {
         val fileEditorManager = FileEditorManager.getInstance(project)
         fileEditorManager.allEditors.find { editor -> 
-            editor.file.fileType == ArthasFileType && editor.file.name == displayName
+            editor.file.fileType == ArthasFileType && editor.file.name == editorFileName
         }?.let { matchedEditor ->
             fileEditorManager.openFile(matchedEditor.file, true, true)
         }
-    }
-    
-    /**
-     * 尝试注册命令执行监听器
-     */
-    private fun tryRegisterListener() {
-        if (listenerRegistered) return
-        
-        val template = service<ArthasExecutionManager>().getTemplate(jvm, tabId) ?: return
-        
-        listenerRegistered = true
-        template.addListener(object : ArthasBridgeListener() {
-            override fun onFinish(command: String, result: ArthasResultItem, rawContent: String) {
-                ApplicationManager.getApplication().invokeLater {
-                    updateDisplay(command, isError = false)
-                }
-            }
-
-            override fun onError(command: String, rawContent: String, exception: Exception) {
-                ApplicationManager.getApplication().invokeLater {
-                    updateDisplay(command, isError = true)
-                }
-            }
-        })
     }
 
     /**
@@ -168,7 +167,7 @@ class ConsoleCommandBanner(
     }
 
     /**
-     * 创建标签组件，格式为"描述: 值"
+     * 创建标签组件
      */
     private fun createTag(key: String, value: String): JLabel {
         return JLabel("$key: $value").apply {
@@ -183,7 +182,7 @@ class ConsoleCommandBanner(
     }
 
     /**
-     * 解析 Arthas 命令，提取关键参数
+     * 解析 Arthas 命令
      */
     private fun parseCommand(command: String): Map<String, String> {
         val info = linkedMapOf<String, String>()
@@ -195,17 +194,12 @@ class ConsoleCommandBanner(
         info["命令"] = parts[0]
         
         when (commandName) {
-            "watch" -> parseWatchCommand(parts, info)
-            "trace" -> parseTraceCommand(parts, info)
-            "stack" -> parseStackCommand(parts, info)
-            "jad" -> parseJadCommand(parts, info)
-            "sc" -> parseScCommand(parts, info)
-            "sm" -> parseSmCommand(parts, info)
-            "monitor" -> parseMonitorCommand(parts, info)
-            "tt" -> parseTtCommand(parts, info)
+            "watch" -> parseClassMethodCommand(parts, info, hasOgnl = true)
+            "trace", "stack", "monitor", "tt" -> parseClassMethodCommand(parts, info)
+            "jad", "sc", "dump" -> parseClassOnlyCommand(parts, info)
+            "sm" -> parseClassMethodCommand(parts, info)
             "ognl" -> parseOgnlCommand(parts, info)
             "getstatic" -> parseGetstaticCommand(parts, info)
-            "dump" -> parseDumpCommand(parts, info)
             "thread" -> parseThreadCommand(parts, info)
             "vmtool" -> parseVmtoolCommand(parts, info)
         }
@@ -213,51 +207,16 @@ class ConsoleCommandBanner(
         return info
     }
 
-    private fun parseWatchCommand(parts: List<String>, info: MutableMap<String, String>) {
+    private fun parseClassMethodCommand(parts: List<String>, info: MutableMap<String, String>, hasOgnl: Boolean = false) {
         val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
         if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
         if (nonOptionParts.size > 1) info["方法"] = nonOptionParts[1]
-        if (nonOptionParts.size > 2) info["OGNL"] = cleanQuotes(nonOptionParts[2])
+        if (hasOgnl && nonOptionParts.size > 2) info["OGNL"] = cleanQuotes(nonOptionParts[2])
     }
 
-    private fun parseTraceCommand(parts: List<String>, info: MutableMap<String, String>) {
+    private fun parseClassOnlyCommand(parts: List<String>, info: MutableMap<String, String>) {
         val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
         if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-        if (nonOptionParts.size > 1) info["方法"] = nonOptionParts[1]
-    }
-
-    private fun parseStackCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-        if (nonOptionParts.size > 1) info["方法"] = nonOptionParts[1]
-    }
-
-    private fun parseJadCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-    }
-
-    private fun parseScCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-    }
-
-    private fun parseSmCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-        if (nonOptionParts.size > 1) info["方法"] = nonOptionParts[1]
-    }
-
-    private fun parseMonitorCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-        if (nonOptionParts.size > 1) info["方法"] = nonOptionParts[1]
-    }
-
-    private fun parseTtCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-        if (nonOptionParts.size > 1) info["方法"] = nonOptionParts[1]
     }
 
     private fun parseOgnlCommand(parts: List<String>, info: MutableMap<String, String>) {
@@ -271,11 +230,6 @@ class ConsoleCommandBanner(
         val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
         if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
         if (nonOptionParts.size > 1) info["字段"] = nonOptionParts[1]
-    }
-
-    private fun parseDumpCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
     }
 
     private fun parseThreadCommand(parts: List<String>, info: MutableMap<String, String>) {
@@ -292,10 +246,71 @@ class ConsoleCommandBanner(
         }
     }
 
-    /**
-     * 移除字符串两端的引号
-     */
     private fun cleanQuotes(str: String): String {
         return str.trim().removeSurrounding("'").removeSurrounding("\"")
+    }
+}
+
+/**
+ * 红色圆角方形停止按钮，类似 IDE 的停止按钮样式
+ */
+private class StopButton(private val onClick: () -> Unit) : JComponent() {
+    
+    // 按钮颜色 - 红色系
+    private val normalColor = Color(0xE05555)      // 正常状态：红色
+    private val hoverColor = Color(0xC94545)       // 悬停状态：深红色
+    private val borderColor = Color(0xD04545)      // 边框颜色
+    
+    private var isHovered = false
+    
+    init {
+        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        toolTipText = "终止当前命令"
+        preferredSize = Dimension(JBUI.scale(20), JBUI.scale(20))
+        
+        addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                onClick()
+            }
+            
+            override fun mouseEntered(e: MouseEvent) {
+                isHovered = true
+                repaint()
+            }
+            
+            override fun mouseExited(e: MouseEvent) {
+                isHovered = false
+                repaint()
+            }
+        })
+    }
+    
+    override fun paintComponent(g: Graphics) {
+        super.paintComponent(g)
+        val g2 = g.create() as Graphics2D
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        
+        val size = JBUI.scale(16)
+        val x = (width - size) / 2
+        val y = (height - size) / 2
+        val cornerRadius = JBUI.scale(3).toDouble()
+        
+        // 绘制圆角矩形背景
+        val rect = RoundRectangle2D.Double(
+            x.toDouble(), y.toDouble(),
+            size.toDouble(), size.toDouble(),
+            cornerRadius, cornerRadius
+        )
+        
+        // 填充背景
+        g2.color = if (isHovered) hoverColor else normalColor
+        g2.fill(rect)
+        
+        // 绘制边框
+        g2.color = borderColor
+        g2.stroke = BasicStroke(1f)
+        g2.draw(rect)
+        
+        g2.dispose()
     }
 }

@@ -123,6 +123,9 @@ class ArthasQueryConsoleActionGroup(
                 val coordinator = project.getService(ArthasExecutionManager::class.java)
                 val tabId = virtualFileAttributes.tabId
                 
+                // 设置当前 indicator，以便停止按钮可以取消
+                coordinator.setCurrentIndicator(virtualFileAttributes.jvm, tabId, indicator)
+                
                 // 根据命令生成简短的显示名称
                 val commandName = CommandNameGenerator.generate(selected)
                 val displayName = "$commandName (${virtualFileAttributes.jvm.name})"
@@ -139,6 +142,9 @@ class ArthasQueryConsoleActionGroup(
                     tabId
                 )
 
+                // 编辑器文件名用于跳转（使用 tab 的显示名称或 JVM 名称）
+                val editorFileName = virtualFileAttributes.displayName ?: virtualFileAttributes.jvm.name
+                
                 val runnerAndConfigurationSettings = RunManager.getInstance(project)
                     .createConfiguration(displayName, ArthasConfigurationType::class.java)
 
@@ -148,6 +154,7 @@ class ArthasQueryConsoleActionGroup(
                     jvm = virtualFileAttributes.jvm
                     this.tabId = virtualFileAttributes.tabId
                     this.displayName = displayName
+                    this.editorFileName = editorFileName
                 })
 
                 ProgramRunnerUtil.executeConfiguration(
@@ -161,6 +168,9 @@ class ArthasQueryConsoleActionGroup(
 
             private fun cleanUp() {
                 ProgressIndicatorStack.pop()
+                // 清除 indicator
+                val coordinator = project.getService(ArthasExecutionManager::class.java)
+                coordinator.setCurrentIndicator(virtualFileAttributes.jvm, virtualFileAttributes.tabId, null)
                 editorEx.markupModel.removeHighlighter(highlighter)
             }
 

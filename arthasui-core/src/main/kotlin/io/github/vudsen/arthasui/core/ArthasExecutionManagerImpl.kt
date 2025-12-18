@@ -3,15 +3,12 @@ package io.github.vudsen.arthasui.core
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
 import com.jetbrains.rd.util.ConcurrentHashMap
 import io.github.vudsen.arthasui.api.*
 import io.github.vudsen.arthasui.api.JVM
 import io.github.vudsen.arthasui.api.conf.HostMachineConfig
 import io.github.vudsen.arthasui.api.conf.JvmProviderConfig
-import io.github.vudsen.arthasui.api.extension.HostMachineConnectManager
 import io.github.vudsen.arthasui.api.extension.JvmProviderManager
-import java.lang.ref.WeakReference
 
 /**
  * 协调命令的执行
@@ -42,6 +39,11 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
      * 保存所有链接，使用复合键支持同一JVM的多个控制台窗口
      */
     private val bridges = ConcurrentHashMap<BridgeKey, ArthasBridgeHolder>()
+
+    /**
+     * 保存当前正在执行命令的 ProgressIndicator
+     */
+    private val currentIndicators = ConcurrentHashMap<BridgeKey, ProgressIndicator>()
 
     private fun createKey(jvm: JVM, tabId: String?): BridgeKey {
         return BridgeKey(jvm.id, tabId)
@@ -106,5 +108,29 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
         return getHolderAndEnsureAlive(jvm, tabId)?.arthasBridge
     }
 
+    /**
+     * 设置当前正在执行命令的 ProgressIndicator
+     */
+    override fun setCurrentIndicator(jvm: JVM, tabId: String?, indicator: ProgressIndicator?) {
+        val key = createKey(jvm, tabId)
+        if (indicator == null) {
+            currentIndicators.remove(key)
+        } else {
+            currentIndicators[key] = indicator
+        }
+    }
+
+    /**
+     * 取消当前正在执行的命令
+     */
+    override fun cancelCurrentCommand(jvm: JVM, tabId: String?): Boolean {
+        val key = createKey(jvm, tabId)
+        val indicator = currentIndicators[key] ?: return false
+        if (!indicator.isCanceled) {
+            indicator.cancel()
+            return true
+        }
+        return false
+    }
 
 }

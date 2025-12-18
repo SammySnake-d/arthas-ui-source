@@ -11,8 +11,10 @@ import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.execution.ui.ConsoleViewPlace
 import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
+import io.github.vudsen.arthasui.api.ArthasExecutionManager
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
 import io.github.vudsen.arthasui.run.ui.ExecuteHistoryUI
 import java.awt.BorderLayout
@@ -26,10 +28,10 @@ class ArthasRunConfiguration(
     RunConfigurationBase<ArthasProcessOptions>(project, configurationFactory, "Arthas Query Console") {
 
     override fun getState(executor: Executor, environment: ExecutionEnvironment): RunProfileState {
-        // 提前获取 state，避免在匿名类中访问外部类的 state 导致问题
         val jvm = state.jvm
         val tabId = state.tabId
         val displayName = state.displayName ?: state.jvm.name
+        val editorFileName = state.editorFileName ?: state.displayName ?: state.jvm.name
         
         return object : CommandLineState(environment) {
             override fun startProcess(): ProcessHandler {
@@ -38,7 +40,13 @@ class ArthasRunConfiguration(
             
             override fun createConsole(executor: Executor): ConsoleView? {
                 val console = super.createConsole(executor) ?: return null
-                val banner = ConsoleCommandBanner(project, jvm, tabId, displayName)
+                val banner = ConsoleCommandBanner(project, jvm, tabId, editorFileName)
+                
+                // 注册监听器到 template
+                service<ArthasExecutionManager>().getTemplate(jvm, tabId)?.let { template ->
+                    banner.registerListener(template)
+                }
+                
                 return BannerWrappedConsole(console, banner)
             }
         }
@@ -72,8 +80,7 @@ class ArthasRunConfiguration(
 }
 
 /**
- * 包装 ConsoleView，在控制台上方添加命令信息横幅。
- * 横幅显示解析后的命令参数（类名、方法名、OGNL表达式等）。
+ * 包装 ConsoleView，在控制台上方添加命令信息横幅
  */
 private class BannerWrappedConsole(
     private val delegate: ConsoleView,
@@ -94,7 +101,7 @@ private class BannerWrappedConsole(
         delegate.dispose()
     }
     
-    // === ConsoleView - 所有方法委托给原始控制台 ===
+    // === ConsoleView ===
     override fun print(text: String, contentType: ConsoleViewContentType) {
         delegate.print(text, contentType)
     }
