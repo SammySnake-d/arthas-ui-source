@@ -3,6 +3,7 @@ package io.github.vudsen.arthasui.core
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.project.Project
 import com.jetbrains.rd.util.ConcurrentHashMap
 import io.github.vudsen.arthasui.api.*
 import io.github.vudsen.arthasui.api.JVM
@@ -13,7 +14,7 @@ import io.github.vudsen.arthasui.api.extension.JvmProviderManager
 /**
  * 协调命令的执行
  */
-class ArthasExecutionManagerImpl() : ArthasExecutionManager {
+class ArthasExecutionManagerImpl(private val project: Project) : ArthasExecutionManager {
 
 
     companion object {
@@ -90,6 +91,11 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
      * 初始化一个 [ArthasBridgeTemplate]
      */
     override fun initTemplate(jvm: JVM, hostMachineConfig: HostMachineConfig, providerConfig: JvmProviderConfig, tabId: String?): ArthasBridgeTemplate {
+        // Register JVM with history service for main class name persistence
+        // Uses jvm.id (PID) and jvm.name (main class) for mapping
+        val historyService = project.getService(ArthasHistoryService::class.java)
+        historyService.registerJvm(jvm.id, jvm.name)
+        
         return getOrInitHolder(jvm, hostMachineConfig, providerConfig, tabId).arthasBridge
     }
 

@@ -163,4 +163,32 @@ class ArthasHistoryService(private val project: Project) {
     fun getRecordCount(mainClass: String): Int {
         return persistent.getRecordCount(mainClass)
     }
+
+    /**
+     * 获取指定主类的唯一 className + methodName 组合列表
+     * 
+     * 用于最近记录快速选择功能，从历史 TT 记录中提取唯一的类名和方法名组合
+     * 
+     * Requirements: 7.4 - WHERE the user has previously recorded a class-method combination 
+     * THEN the ArthasUI SHALL provide a dropdown with recent recordings for quick selection
+     * 
+     * @param mainClass 主类名（JVM 的主类）
+     * @return 唯一的 className + methodName 组合列表，按最近使用时间排序（最近的在前）
+     */
+    fun getRecentRecordings(mainClass: String): List<Pair<String, String>> {
+        val ttRecords = getTtRecords(mainClass)
+        if (ttRecords.isEmpty()) {
+            return emptyList()
+        }
+        
+        // 按时间戳降序排序，然后提取唯一的 className + methodName 组合
+        // 使用 LinkedHashSet 保持插入顺序（最近的在前）
+        val uniqueCombinations = LinkedHashSet<Pair<String, String>>()
+        ttRecords.sortedByDescending { it.timestamp }
+            .forEach { record ->
+                uniqueCombinations.add(Pair(record.className, record.methodName))
+            }
+        
+        return uniqueCombinations.toList()
+    }
 }

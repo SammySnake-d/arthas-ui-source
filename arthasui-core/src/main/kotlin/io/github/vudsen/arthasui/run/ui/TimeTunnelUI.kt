@@ -25,6 +25,8 @@ import io.github.vudsen.arthasui.core.ui.HistoryManagementDialog
 import io.github.vudsen.arthasui.core.ui.OgnlTreeDisplayUI
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.swing.*
@@ -66,6 +68,7 @@ class TimeTunnelUI(
 
     // UI Components - Input Area
     private val classNameField = JBTextField(30)
+    private val recentRecordingsButton = JButton()  // 最近记录下拉按钮
     private val methodNameField = JBTextField(20)
     private val recordCountSpinner = JSpinner(SpinnerNumberModel(10, 1, 1000, 1))
     private val startButton = JButton("开始记录")
@@ -125,16 +128,24 @@ class TimeTunnelUI(
 
     /**
      * Creates the input area with class name, method name, record count, and buttons
-     * Requirements: 1.2, 1.4
+     * Requirements: 1.2, 1.4, 7.4
      */
     private fun createInputArea(): JComponent {
         val panel = JPanel(FlowLayout(FlowLayout.LEFT, 5, 5))
         panel.border = JBUI.Borders.empty(5)
         
-        // Class name input
+        // Class name input with recent recordings dropdown
         panel.add(JBLabel("类名:"))
         classNameField.toolTipText = "输入要记录的类名，支持通配符 *"
         panel.add(classNameField)
+        
+        // Recent recordings dropdown button
+        // Requirements: 7.4 - WHERE the user has previously recorded a class-method combination 
+        // THEN the ArthasUI SHALL provide a dropdown with recent recordings for quick selection
+        recentRecordingsButton.icon = AllIcons.General.ArrowDown
+        recentRecordingsButton.toolTipText = "选择最近记录的类和方法"
+        recentRecordingsButton.preferredSize = java.awt.Dimension(28, 28)
+        panel.add(recentRecordingsButton)
         
         // Method name input
         panel.add(JBLabel("方法名:"))
@@ -234,6 +245,102 @@ class TimeTunnelUI(
         stopButton.addActionListener { stopRecording() }
         refreshButton.addActionListener { refreshRecordList() }
         historyManageButton.addActionListener { openHistoryManagementDialog() }
+        recentRecordingsButton.addActionListener { showRecentRecordingsPopup() }
+    }
+    
+    /**
+     * 显示最近记录的下拉菜单
+     * 
+     * 从 ArthasHistoryService 获取该主类的历史 TT 记录，
+     * 提取唯一的 className + methodName 组合，
+     * 选择后自动填充输入框。
+     * 
+     * Requirements: 7.4 - WHERE the user has previously recorded a class-method combination 
+     * THEN the ArthasUI SHALL provide a dropdown with recent recordings for quick selection
+     */
+    private fun showRecentRecordingsPopup() {
+        val mainClass = jvm.name
+        val recentRecordings = historyService.getRecentRecordings(mainClass)
+        
+        if (recentRecordings.isEmpty()) {
+            // 没有历史记录时显示提示
+            val emptyMenu = JPopupMenu()
+            val emptyItem = JMenuItem("暂无历史记录")
+            emptyItem.isEnabled = false
+            emptyMenu.add(emptyItem)
+            emptyMenu.show(recentRecordingsButton, 0, recentRecordingsButton.height)
+            return
+        }
+        
+        // 创建下拉菜单
+        val popupMenu = JPopupMenu()
+        
+        // 添加标题
+        val titleItem = JMenuItem("最近记录 (点击选择)")
+        titleItem.isEnabled = false
+        popupMenu.add(titleItem)
+        popupMenu.addSeparator()
+        
+        // 添加最近记录项（最多显示 10 个）
+        val maxItems = minOf(recentRecordings.size, 10)
+        for (i in 0 until maxItems) {
+            val (className, methodName) = recentRecordings[i]
+            val displayText = formatRecordingDisplayText(className, methodName)
+            val menuItem = JMenuItem(displayText)
+            menuItem.toolTipText = "类: $className\n方法: $methodName"
+            menuItem.addActionListener {
+                // 选择后自动填充输入框
+                classNameField.text = className
+                methodNameField.text = methodName
+                classNameField.requestFocus()
+            }
+            popupMenu.add(menuItem)
+        }
+        
+        // 如果有更多记录，显示提示
+        if (recentRecordings.size > maxItems) {
+            popupMenu.addSeparator()
+            val moreItem = JMenuItem("还有 ${recentRecordings.size - maxItems} 条记录...")
+            moreItem.isEnabled = false
+            popupMenu.add(moreItem)
+        }
+        
+        // 显示下拉菜单
+        popupMenu.show(recentRecordingsButton, 0, recentRecordingsButton.height)
+    }
+    
+    /**
+     * 格式化记录显示文本
+     * 
+     * 将类名和方法名格式化为适合在下拉菜单中显示的文本。
+     * 如果类名过长，只显示简短类名。
+     * 
+     * @param className 类名
+     * @param methodName 方法名
+     * @return 格式化后的显示文本
+     */
+    private fun formatRecordingDisplayText(className: String, methodName: String): String {
+        // 提取简短类名（最后一个点之后的部分）
+        val shortClassName = if (className.contains('.')) {
+            className.substringAfterLast('.')
+        } else {
+            className
+        }
+        
+        // 如果简短类名和完整类名相同，直接显示
+        // 否则显示简短类名并在括号中显示包名前缀
+        return if (shortClassName == className) {
+            "$className.$methodName"
+        } else {
+            val packagePrefix = className.substringBeforeLast('.')
+            // 如果包名过长，只显示最后两级
+            val shortPackage = if (packagePrefix.count { it == '.' } > 1) {
+                "..." + packagePrefix.substringAfterLast('.', packagePrefix.substringAfterLast('.'))
+            } else {
+                packagePrefix
+            }
+            "$shortClassName.$methodName ($shortPackage)"
+        }
     }
     
     /**
