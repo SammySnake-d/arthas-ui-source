@@ -23,7 +23,7 @@ import javax.swing.*
  * 控制台命令信息横幅面板。
  * 
  * 显示当前执行命令的解析信息（命令类型、类名、方法名、OGNL表达式等），
- * 以"描述: 值"的格式展示在控制台上方。
+ * 停止按钮颜色表示状态：红色=运行中，灰色=已停止。
  */
 class ConsoleCommandBanner(
     private val project: Project,
@@ -32,7 +32,6 @@ class ConsoleCommandBanner(
     private val editorFileName: String
 ) : JPanel(BorderLayout()) {
     
-    // 获取项目级别的 ArthasExecutionManager 服务
     private val executionManager: ArthasExecutionManager
         get() = project.service()
 
@@ -40,6 +39,8 @@ class ConsoleCommandBanner(
     private val waitingLabel = JLabel("等待执行命令...", SwingConstants.CENTER)
     
     private var listenerRegistered = false
+    private lateinit var stopButton: JLabel
+    private var isRunning = false
 
     init {
         border = BorderFactory.createCompoundBorder(
@@ -50,55 +51,61 @@ class ConsoleCommandBanner(
 
         add(infoPanel, BorderLayout.CENTER)
         
-        // 右侧按钮面板：终止按钮 + 跳转按钮
+        stopButton = createStopButton()
         val buttonPanel = JPanel(FlowLayout(FlowLayout.RIGHT, JBUI.scale(4), 0)).apply {
             isOpaque = false
-            add(createStopButton())
+            add(stopButton)
             add(createNavigateButton())
         }
         add(buttonPanel, BorderLayout.EAST)
         
+        updateStopButtonState(false)
         showWaiting()
         
-        // 延迟注册监听器，避免在初始化时阻塞
         SwingUtilities.invokeLater { tryRegisterListener() }
     }
     
-    /**
-     * 尝试注册监听器到 template
-     */
     private fun tryRegisterListener() {
         if (listenerRegistered) return
         
         val template = executionManager.getTemplate(jvm, tabId) ?: return
-        
         listenerRegistered = true
         
-        var lastDisplayedCommand: String? = null
+        var currentRunningCommand: String? = null
+        var hasShownRunning = false
         
         template.addListener(object : ArthasBridgeListener() {
             override fun onContent(result: String) {
-                // 当收到内容时，检查是否有新命令正在执行
-                val currentCommand = executionManager.getCurrentCommand(jvm, tabId)
-                if (currentCommand != null && currentCommand != lastDisplayedCommand) {
-                    lastDisplayedCommand = currentCommand
-                    ApplicationManager.getApplication().invokeLater {
-                        updateDisplay(currentCommand, isError = false, isRunning = true)
+                // 只在命令开始时（第一次收到内容）更新显示
+                // 使用 template.isBusy() 来判断是否真的在执行命令
+                if (!hasShownRunning && template.isBusy()) {
+                    val cmd = executionManager.getCurrentCommand(jvm, tabId)
+                    if (cmd != null && cmd != currentRunningCommand) {
+                        currentRunningCommand = cmd
+                        hasShownRunning = true
+                        ApplicationManager.getApplication().invokeLater {
+                            updateStopButtonState(true)
+                            updateDisplay(cmd)
+                        }
                     }
                 }
             }
             
             override fun onFinish(command: String, result: ArthasResultItem, rawContent: String) {
-                lastDisplayedCommand = command
+                currentRunningCommand = command
+                hasShownRunning = false
                 ApplicationManager.getApplication().invokeLater {
-                    updateDisplay(command, isError = false, isRunning = false)
+                    updateStopButtonState(false)
+                    updateDisplay(command)
                 }
             }
 
             override fun onError(command: String, rawContent: String, exception: Exception) {
-                lastDisplayedCommand = command
+                currentRunningCommand = command
+                hasShownRunning = false
                 ApplicationManager.getApplication().invokeLater {
-                    updateDisplay(command, isError = true, isRunning = false)
+                    updateStopButtonState(false)
+                    updateDisplay(command)
                 }
             }
         })
@@ -111,36 +118,43 @@ class ConsoleCommandBanner(
         infoPanel.repaint()
     }
     
-    /**
-     * 创建终止按钮 - 使用 IntelliJ 官方的停止图标
-     */
     private fun createStopButton(): JLabel {
         return JLabel(AllIcons.Actions.Suspend).apply {
             toolTipText = "终止当前命令"
-            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             border = BorderFactory.createEmptyBorder(JBUI.scale(2), JBUI.scale(4), JBUI.scale(2), JBUI.scale(4))
             
             addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
-                    stopCurrentCommand()
+                    if (isRunning) {
+                        stopCurrentCommand()
+                    }
                 }
             })
         }
     }
     
     /**
-     * 终止当前正在执行的命令
-     * 通过取消 ProgressIndicator 来中断命令执行，效果与点击后台任务条的取消按钮相同
+     * 更新停止按钮状态
+     * @param running true=运行中(红色可点击), false=已停止(灰色不可点击)
      */
+    private fun updateStopButtonState(running: Boolean) {
+        isRunning = running
+        if (running) {
+            stopButton.icon = AllIcons.Actions.Suspend
+            stopButton.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            stopButton.toolTipText = "终止当前命令"
+        } else {
+            stopButton.icon = AllIcons.Process.Stop
+            stopButton.cursor = Cursor.getDefaultCursor()
+            stopButton.toolTipText = "没有正在运行的命令"
+        }
+    }
+    
     private fun stopCurrentCommand() {
         executionManager.cancelCurrentCommand(jvm, tabId)
     }
     
-    /**
-     * 创建跳转按钮 - 显示绑定的 tab 名称，使用官方跳转图标
-     */
     private fun createNavigateButton(): JLabel {
-        // 显示 tab 名称，让用户知道控制台绑定了哪个 tab
         return JLabel(editorFileName, AllIcons.General.Locate, SwingConstants.LEFT).apply {
             toolTipText = "跳转到查询编辑器: $editorFileName"
             cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
@@ -154,9 +168,6 @@ class ConsoleCommandBanner(
         }
     }
     
-    /**
-     * 跳转到对应的查询编辑器
-     */
     private fun navigateToQueryEditor() {
         val fileEditorManager = FileEditorManager.getInstance(project)
         fileEditorManager.allEditors.find { editor -> 
@@ -167,12 +178,9 @@ class ConsoleCommandBanner(
     }
 
     /**
-     * 更新横幅显示内容
-     * @param command 命令字符串
-     * @param isError 是否出错
-     * @param isRunning 是否正在运行
+     * 更新横幅显示内容 - 不显示状态，状态由按钮颜色表示
      */
-    private fun updateDisplay(command: String?, isError: Boolean = false, isRunning: Boolean = false) {
+    private fun updateDisplay(command: String?) {
         infoPanel.removeAll()
 
         if (command.isNullOrBlank()) {
@@ -182,20 +190,7 @@ class ConsoleCommandBanner(
 
         val commandInfo = parseCommand(command)
         
-        // 添加状态标签
-        val statusText = when {
-            isError -> "错误"
-            isRunning -> "运行中"
-            else -> "已完成"
-        }
-        val statusLabel = createTag("状态", statusText)
-        when {
-            isError -> statusLabel.foreground = JBColor.RED
-            isRunning -> statusLabel.foreground = JBColor(0x59A869, 0x499C54)  // 绿色
-        }
-        infoPanel.add(statusLabel)
-        
-        // 添加解析出的命令参数
+        // 只显示命令参数，不显示状态标签
         commandInfo.forEach { (key, value) ->
             if (value.isNotBlank()) {
                 infoPanel.add(createTag(key, value))
@@ -206,9 +201,6 @@ class ConsoleCommandBanner(
         infoPanel.repaint()
     }
 
-    /**
-     * 创建标签组件
-     */
     private fun createTag(key: String, value: String): JLabel {
         return JLabel("$key: $value").apply {
             foreground = JBColor(0x333333, 0xBBBBBB)
@@ -221,12 +213,8 @@ class ConsoleCommandBanner(
         }
     }
 
-    /**
-     * 解析 Arthas 命令
-     */
     private fun parseCommand(command: String): Map<String, String> {
         val info = linkedMapOf<String, String>()
-        // 移除命令末尾的分号
         val cleanCommand = command.trim().removeSuffix(";").trim()
         val parts = cleanCommand.split(Regex("\\s+"))
         
@@ -244,12 +232,6 @@ class ConsoleCommandBanner(
             "getstatic" -> parseGetstaticCommand(parts, info)
             "thread" -> parseThreadCommand(parts, info)
             "vmtool" -> parseVmtoolCommand(parts, info)
-            // 简单命令（无参数或可选参数）- 只显示命令名
-            "dashboard", "jvm", "sysprop", "sysenv", "vmoption", "perfcounter", 
-            "logger", "mbean", "version", "session", "reset", "shutdown", "stop",
-            "help", "cat", "base64", "tee", "pwd", "cls", "history", "quit", "exit", "keymap" -> {
-                // 这些命令只需要显示命令名，已经在上面添加了
-            }
         }
         
         return info
