@@ -6,6 +6,7 @@ import com.intellij.execution.configurations.*
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.execution.ui.ConsoleView
+import com.intellij.execution.ui.ConsoleViewWrapper
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.Project
 import io.github.vudsen.arthasui.run.ui.ConsoleCommandBanner
@@ -38,10 +39,6 @@ class ArthasRunConfiguration(
                 )
             }
 
-            /**
-             * ⚠️ 新 SDK 下只能返回 ConsoleView
-             * 但我们只包 UI，不做代理
-             */
             override fun createConsole(executor: Executor): ConsoleView? {
                 val console = super.createConsole(executor) ?: return null
 
@@ -59,15 +56,15 @@ class ArthasRunConfiguration(
     }
 
     /**
-     * ⚠️ 关键点：
-     * - 实现 ConsoleView
-     * - 不使用 by delegate
-     * - 所有行为直接转发
+     * ✅ 官方推荐方式：
+     * - 继承 ConsoleViewWrapper
+     * - 不碰 Console 行为
+     * - 只改 UI
      */
     private class BannerWrappedConsole(
-        private val delegate: ConsoleView,
-        private val banner: JComponent
-    ) : ConsoleView {
+        delegate: ConsoleView,
+        banner: JComponent
+    ) : ConsoleViewWrapper(delegate) {
 
         private val wrapperPanel = JPanel(BorderLayout()).apply {
             add(banner, BorderLayout.NORTH)
@@ -78,54 +75,6 @@ class ArthasRunConfiguration(
 
         override fun getPreferredFocusableComponent(): JComponent? =
             delegate.preferredFocusableComponent
-
-        // === 行为完全转发，保证 Console 正常工作 ===
-
-        override fun print(text: String, contentType: com.intellij.execution.ui.ConsoleViewContentType) {
-            delegate.print(text, contentType)
-        }
-
-        override fun clear() {
-            delegate.clear()
-        }
-
-        override fun scrollToEnd() {
-            delegate.scrollToEnd()
-        }
-
-        override fun attachToProcess(processHandler: ProcessHandler) {
-            delegate.attachToProcess(processHandler)
-        }
-
-        override fun setOutputPaused(value: Boolean) {
-            delegate.isOutputPaused = value
-        }
-
-        override fun isOutputPaused(): Boolean =
-            delegate.isOutputPaused
-
-        override fun hasDeferredOutput(): Boolean =
-            delegate.hasDeferredOutput()
-
-        override fun performWhenNoDeferredOutput(runnable: Runnable) {
-            delegate.performWhenNoDeferredOutput(runnable)
-        }
-
-        override fun setHelpId(helpId: String) {
-            delegate.setHelpId(helpId)
-        }
-
-        override fun addMessageFilter(filter: com.intellij.execution.filters.Filter) {
-            delegate.addMessageFilter(filter)
-        }
-
-        override fun printHyperlink(text: String, info: com.intellij.execution.filters.HyperlinkInfo?) {
-            delegate.printHyperlink(text, info)
-        }
-
-        override fun dispose() {
-            delegate.dispose()
-        }
     }
 
     override fun getConfigurationEditor(): SettingsEditor<out RunConfiguration> {
