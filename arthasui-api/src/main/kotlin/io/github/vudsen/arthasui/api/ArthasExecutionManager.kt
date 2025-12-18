@@ -51,4 +51,20 @@ interface ArthasExecutionManager {
      */
     fun cancelCurrentCommand(jvm: JVM, tabId: String?): Boolean
 
+    /**
+     * 设置当前正在执行的命令
+     * @param jvm JVM instance
+     * @param tabId Unique identifier for the tab
+     * @param command The command being executed, null to clear
+     */
+    fun setCurrentCommand(jvm: JVM, tabId: String?, command: String?)
+
+    /**
+     * 获取当前正在执行的命令
+     * @param jvm JVM instance
+     * @param tabId Unique identifier for the tab
+     * @return The current command, or null if no command is running
+     */
+    fun getCurrentCommand(jvm: JVM, tabId: String?): String?
+
 }

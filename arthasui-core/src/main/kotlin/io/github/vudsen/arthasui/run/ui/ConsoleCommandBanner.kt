@@ -9,10 +9,11 @@ import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
 import io.github.vudsen.arthasui.api.*
 import io.github.vudsen.arthasui.language.arthas.psi.ArthasFileType
-import java.awt.*
+import java.awt.BorderLayout
+import java.awt.Cursor
+import java.awt.FlowLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import java.awt.geom.RoundRectangle2D
 import javax.swing.*
 
 /**
@@ -52,29 +53,60 @@ class ConsoleCommandBanner(
         
         showWaiting()
         
-        // 延迟注册监听器，避免在初始化时阻塞
-        SwingUtilities.invokeLater { tryRegisterListener() }
+        // 延迟注册监听器，使用定时器重试直到 template 可用
+        scheduleListenerRegistration()
     }
     
     /**
-     * 尝试注册监听器到 template
+     * 调度监听器注册，如果 template 还不可用则重试
      */
-    private fun tryRegisterListener() {
+    private fun scheduleListenerRegistration() {
         if (listenerRegistered) return
         
-        val template = service<ArthasExecutionManager>().getTemplate(jvm, tabId) ?: return
-        
+        val template = service<ArthasExecutionManager>().getTemplate(jvm, tabId)
+        if (template != null) {
+            registerListener(template)
+        } else {
+            // template 还没准备好，500ms 后重试
+            Timer(500) { scheduleListenerRegistration() }.apply {
+                isRepeats = false
+                start()
+            }
+        }
+    }
+    
+    /**
+     * 注册监听器到 template
+     */
+    private fun registerListener(template: ArthasBridgeTemplate) {
+        if (listenerRegistered) return
         listenerRegistered = true
+        
+        var lastDisplayedCommand: String? = null
+        
         template.addListener(object : ArthasBridgeListener() {
+            override fun onContent(result: String) {
+                // 当收到内容时，检查是否有新命令正在执行
+                val currentCommand = service<ArthasExecutionManager>().getCurrentCommand(jvm, tabId)
+                if (currentCommand != null && currentCommand != lastDisplayedCommand) {
+                    lastDisplayedCommand = currentCommand
+                    ApplicationManager.getApplication().invokeLater {
+                        updateDisplay(currentCommand, isError = false, isRunning = true)
+                    }
+                }
+            }
+            
             override fun onFinish(command: String, result: ArthasResultItem, rawContent: String) {
+                lastDisplayedCommand = command
                 ApplicationManager.getApplication().invokeLater {
-                    updateDisplay(command, isError = false)
+                    updateDisplay(command, isError = false, isRunning = false)
                 }
             }
 
             override fun onError(command: String, rawContent: String, exception: Exception) {
+                lastDisplayedCommand = command
                 ApplicationManager.getApplication().invokeLater {
-                    updateDisplay(command, isError = true)
+                    updateDisplay(command, isError = true, isRunning = false)
                 }
             }
         })
@@ -88,10 +120,20 @@ class ConsoleCommandBanner(
     }
     
     /**
-     * 创建终止按钮 - 红色圆角方形，类似 IDE 的停止按钮
+     * 创建终止按钮 - 使用 IntelliJ 官方的停止图标
      */
-    private fun createStopButton(): JComponent {
-        return StopButton { stopCurrentCommand() }
+    private fun createStopButton(): JLabel {
+        return JLabel(AllIcons.Actions.Suspend).apply {
+            toolTipText = "终止当前命令"
+            cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            border = BorderFactory.createEmptyBorder(JBUI.scale(2), JBUI.scale(4), JBUI.scale(2), JBUI.scale(4))
+            
+            addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    stopCurrentCommand()
+                }
+            })
+        }
     }
     
     /**
@@ -146,8 +188,11 @@ class ConsoleCommandBanner(
 
     /**
      * 更新横幅显示内容
+     * @param command 命令字符串
+     * @param isError 是否出错
+     * @param isRunning 是否正在运行
      */
-    private fun updateDisplay(command: String?, isError: Boolean = false) {
+    private fun updateDisplay(command: String?, isError: Boolean = false, isRunning: Boolean = false) {
         infoPanel.removeAll()
 
         if (command.isNullOrBlank()) {
@@ -158,10 +203,15 @@ class ConsoleCommandBanner(
         val commandInfo = parseCommand(command)
         
         // 添加状态标签
-        val statusText = if (isError) "错误" else "已完成"
+        val statusText = when {
+            isError -> "错误"
+            isRunning -> "运行中"
+            else -> "已完成"
+        }
         val statusLabel = createTag("状态", statusText)
-        if (isError) {
-            statusLabel.foreground = JBColor.RED
+        when {
+            isError -> statusLabel.foreground = JBColor.RED
+            isRunning -> statusLabel.foreground = JBColor(0x59A869, 0x499C54)  // 绿色
         }
         infoPanel.add(statusLabel)
         
@@ -196,7 +246,9 @@ class ConsoleCommandBanner(
      */
     private fun parseCommand(command: String): Map<String, String> {
         val info = linkedMapOf<String, String>()
-        val parts = command.trim().split(Regex("\\s+"))
+        // 移除命令末尾的分号
+        val cleanCommand = command.trim().removeSuffix(";").trim()
+        val parts = cleanCommand.split(Regex("\\s+"))
         
         if (parts.isEmpty()) return info
         
@@ -206,12 +258,18 @@ class ConsoleCommandBanner(
         when (commandName) {
             "watch" -> parseClassMethodCommand(parts, info, hasOgnl = true)
             "trace", "stack", "monitor", "tt" -> parseClassMethodCommand(parts, info)
-            "jad", "sc", "dump" -> parseClassOnlyCommand(parts, info)
+            "jad", "sc", "dump", "classloader", "memory", "heapdump" -> parseClassOnlyCommand(parts, info)
             "sm" -> parseClassMethodCommand(parts, info)
             "ognl" -> parseOgnlCommand(parts, info)
             "getstatic" -> parseGetstaticCommand(parts, info)
             "thread" -> parseThreadCommand(parts, info)
             "vmtool" -> parseVmtoolCommand(parts, info)
+            // 简单命令（无参数或可选参数）- 只显示命令名
+            "dashboard", "jvm", "sysprop", "sysenv", "vmoption", "perfcounter", 
+            "logger", "mbean", "version", "session", "reset", "shutdown", "stop",
+            "help", "cat", "base64", "tee", "pwd", "cls", "history", "quit", "exit", "keymap" -> {
+                // 这些命令只需要显示命令名，已经在上面添加了
+            }
         }
         
         return info
@@ -258,69 +316,5 @@ class ConsoleCommandBanner(
 
     private fun cleanQuotes(str: String): String {
         return str.trim().removeSurrounding("'").removeSurrounding("\"")
-    }
-}
-
-/**
- * 红色圆角方形停止按钮，类似 IDE 的停止按钮样式
- */
-private class StopButton(private val onClick: () -> Unit) : JComponent() {
-    
-    // 按钮颜色 - 红色系
-    private val normalColor = Color(0xE05555)      // 正常状态：红色
-    private val hoverColor = Color(0xC94545)       // 悬停状态：深红色
-    private val borderColor = Color(0xD04545)      // 边框颜色
-    
-    private var isHovered = false
-    
-    init {
-        cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        toolTipText = "终止当前命令"
-        preferredSize = Dimension(JBUI.scale(20), JBUI.scale(20))
-        
-        addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) {
-                onClick()
-            }
-            
-            override fun mouseEntered(e: MouseEvent) {
-                isHovered = true
-                repaint()
-            }
-            
-            override fun mouseExited(e: MouseEvent) {
-                isHovered = false
-                repaint()
-            }
-        })
-    }
-    
-    override fun paintComponent(g: Graphics) {
-        super.paintComponent(g)
-        val g2 = g.create() as Graphics2D
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-        
-        val size = JBUI.scale(16)
-        val x = (width - size) / 2
-        val y = (height - size) / 2
-        val cornerRadius = JBUI.scale(3).toDouble()
-        
-        // 绘制圆角矩形背景
-        val rect = RoundRectangle2D.Double(
-            x.toDouble(), y.toDouble(),
-            size.toDouble(), size.toDouble(),
-            cornerRadius, cornerRadius
-        )
-        
-        // 填充背景
-        g2.color = if (isHovered) hoverColor else normalColor
-        g2.fill(rect)
-        
-        // 绘制边框
-        g2.color = borderColor
-        g2.stroke = BasicStroke(1f)
-        g2.draw(rect)
-        
-        g2.dispose()
     }
 }

@@ -123,8 +123,9 @@ class ArthasQueryConsoleActionGroup(
                 val coordinator = project.getService(ArthasExecutionManager::class.java)
                 val tabId = virtualFileAttributes.tabId
                 
-                // 设置当前 indicator，以便停止按钮可以取消
+                // 设置当前 indicator 和命令，以便停止按钮可以取消，横幅可以显示
                 coordinator.setCurrentIndicator(virtualFileAttributes.jvm, tabId, indicator)
+                coordinator.setCurrentCommand(virtualFileAttributes.jvm, tabId, selected)
                 
                 // 根据命令生成简短的显示名称
                 val commandName = CommandNameGenerator.generate(selected)
@@ -168,9 +169,10 @@ class ArthasQueryConsoleActionGroup(
 
             private fun cleanUp() {
                 ProgressIndicatorStack.pop()
-                // 清除 indicator
+                // 清除 indicator 和命令
                 val coordinator = project.getService(ArthasExecutionManager::class.java)
                 coordinator.setCurrentIndicator(virtualFileAttributes.jvm, virtualFileAttributes.tabId, null)
+                coordinator.setCurrentCommand(virtualFileAttributes.jvm, virtualFileAttributes.tabId, null)
                 editorEx.markupModel.removeHighlighter(highlighter)
             }
 

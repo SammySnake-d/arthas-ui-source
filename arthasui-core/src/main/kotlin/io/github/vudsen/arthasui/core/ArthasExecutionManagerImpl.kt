@@ -133,4 +133,29 @@ class ArthasExecutionManagerImpl() : ArthasExecutionManager {
         return false
     }
 
+    /**
+     * 保存当前正在执行的命令
+     */
+    private val currentCommands = ConcurrentHashMap<BridgeKey, String>()
+
+    /**
+     * 设置当前正在执行的命令
+     */
+    override fun setCurrentCommand(jvm: JVM, tabId: String?, command: String?) {
+        val key = createKey(jvm, tabId)
+        if (command == null) {
+            currentCommands.remove(key)
+        } else {
+            currentCommands[key] = command
+        }
+    }
+
+    /**
+     * 获取当前正在执行的命令
+     */
+    override fun getCurrentCommand(jvm: JVM, tabId: String?): String? {
+        val key = createKey(jvm, tabId)
+        return currentCommands[key]
+    }
+
 }
