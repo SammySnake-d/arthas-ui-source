@@ -50,11 +50,28 @@ class TabPersistent : PersistentStateComponent<TabPersistentState> {
      * Generate a unique key for a JVM context.
      * @param hostMachineId The host machine ID
      * @param providerId The provider type
-     * @param jvmId The JVM ID
+     * @param jvmId The JVM ID (PID)
      * @return A unique key string
+     * @deprecated Use generateJvmKeyByMainClass instead for persistence across process restarts
      */
+    @Deprecated("Use generateJvmKeyByMainClass for persistence across process restarts", 
+                ReplaceWith("generateJvmKeyByMainClass(hostMachineId, providerId, mainClass)"))
     fun generateJvmKey(hostMachineId: Long, providerId: String, jvmId: String): String {
         return "$hostMachineId:$providerId:$jvmId"
+    }
+
+    /**
+     * Generate a unique key for a JVM context using main class name.
+     * This allows tabs to persist across process restarts since main class name
+     * remains constant while PID changes.
+     * 
+     * @param hostMachineId The host machine ID
+     * @param providerId The provider type
+     * @param mainClass The JVM main class name (e.g., com.example.Main)
+     * @return A unique key string
+     */
+    fun generateJvmKeyByMainClass(hostMachineId: Long, providerId: String, mainClass: String): String {
+        return "$hostMachineId:$providerId:mainClass:$mainClass"
     }
 
     /**

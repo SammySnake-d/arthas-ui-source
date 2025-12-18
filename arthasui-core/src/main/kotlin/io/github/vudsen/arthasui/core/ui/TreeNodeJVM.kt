@@ -35,7 +35,9 @@ class TreeNodeJVM(
     private val tabPersistent = service<TabPersistent>()
 
     private fun getJvmKey(): String {
-        return tabPersistent.generateJvmKey(ctx.config.id, providerConfig.type, jvm.id)
+        // Use main class name (jvm.name) instead of PID (jvm.id) for persistence
+        // This allows tabs to persist across process restarts
+        return tabPersistent.generateJvmKeyByMainClass(ctx.config.id, providerConfig.type, jvm.name)
     }
 
     init {
