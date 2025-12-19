@@ -228,62 +228,123 @@ class ConsoleCommandBanner(
     private fun parseCommand(command: String): Map<String, String> {
         val info = linkedMapOf<String, String>()
         val cleanCommand = command.trim().removeSuffix(";").trim()
-        val parts = cleanCommand.split(Regex("\\s+"))
         
-        if (parts.isEmpty()) return info
+        // 使用智能分割，保留引号内的内容
+        val tokens = tokenizeCommand(cleanCommand)
         
-        val commandName = parts[0].lowercase()
-        info["命令"] = parts[0]
+        if (tokens.isEmpty()) return info
+        
+        val commandName = tokens[0].lowercase()
+        info["命令"] = tokens[0]
         
         when (commandName) {
-            "watch" -> parseClassMethodCommand(parts, info, hasOgnl = true)
-            "trace", "stack", "monitor", "tt" -> parseClassMethodCommand(parts, info)
-            "jad", "sc", "dump", "classloader", "memory", "heapdump" -> parseClassOnlyCommand(parts, info)
-            "sm" -> parseClassMethodCommand(parts, info)
-            "ognl" -> parseOgnlCommand(parts, info)
-            "getstatic" -> parseGetstaticCommand(parts, info)
-            "thread" -> parseThreadCommand(parts, info)
-            "vmtool" -> parseVmtoolCommand(parts, info)
+            "watch" -> parseWatchCommand(cleanCommand, tokens, info)
+            "trace", "stack", "monitor", "tt" -> parseClassMethodCommand(tokens, info)
+            "jad", "sc", "dump", "classloader", "memory", "heapdump" -> parseClassOnlyCommand(tokens, info)
+            "sm" -> parseClassMethodCommand(tokens, info)
+            "ognl" -> parseOgnlCommand(cleanCommand, info)
+            "getstatic" -> parseGetstaticCommand(tokens, info)
+            "thread" -> parseThreadCommand(tokens, info)
+            "vmtool" -> parseVmtoolCommand(tokens, info)
         }
         
         return info
     }
-
-    private fun parseClassMethodCommand(parts: List<String>, info: MutableMap<String, String>, hasOgnl: Boolean = false) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-        if (nonOptionParts.size > 1) info["方法"] = nonOptionParts[1]
-        if (hasOgnl && nonOptionParts.size > 2) info["OGNL"] = cleanQuotes(nonOptionParts[2])
+    
+    /**
+     * 智能分割命令，保留引号内的内容作为一个整体
+     */
+    private fun tokenizeCommand(command: String): List<String> {
+        val tokens = mutableListOf<String>()
+        val current = StringBuilder()
+        var inQuote = false
+        var quoteChar = ' '
+        var braceDepth = 0
+        
+        for (ch in command) {
+            when {
+                !inQuote && (ch == '\'' || ch == '"') -> {
+                    inQuote = true
+                    quoteChar = ch
+                    current.append(ch)
+                }
+                inQuote && ch == quoteChar && braceDepth == 0 -> {
+                    inQuote = false
+                    current.append(ch)
+                }
+                ch == '{' -> {
+                    braceDepth++
+                    current.append(ch)
+                }
+                ch == '}' -> {
+                    braceDepth = maxOf(0, braceDepth - 1)
+                    current.append(ch)
+                }
+                !inQuote && braceDepth == 0 && ch.isWhitespace() -> {
+                    if (current.isNotEmpty()) {
+                        tokens.add(current.toString())
+                        current.clear()
+                    }
+                }
+                else -> current.append(ch)
+            }
+        }
+        if (current.isNotEmpty()) {
+            tokens.add(current.toString())
+        }
+        return tokens
     }
-
-    private fun parseClassOnlyCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-    }
-
-    private fun parseOgnlCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) {
-            info["表达式"] = cleanQuotes(nonOptionParts.joinToString(" "))
+    
+    /**
+     * 解析 watch 命令，特殊处理 OGNL 表达式
+     * watch class method [ognl] [options]
+     */
+    private fun parseWatchCommand(command: String, tokens: List<String>, info: MutableMap<String, String>) {
+        val nonOptionTokens = tokens.drop(1).filter { !it.startsWith("-") }
+        if (nonOptionTokens.isNotEmpty()) info["类"] = nonOptionTokens[0]
+        if (nonOptionTokens.size > 1) info["方法"] = nonOptionTokens[1]
+        if (nonOptionTokens.size > 2) {
+            // OGNL 表达式可能包含引号
+            info["OGNL"] = cleanQuotes(nonOptionTokens[2])
         }
     }
 
-    private fun parseGetstaticCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["类"] = nonOptionParts[0]
-        if (nonOptionParts.size > 1) info["字段"] = nonOptionParts[1]
+    private fun parseClassMethodCommand(tokens: List<String>, info: MutableMap<String, String>) {
+        val nonOptionTokens = tokens.drop(1).filter { !it.startsWith("-") }
+        if (nonOptionTokens.isNotEmpty()) info["类"] = nonOptionTokens[0]
+        if (nonOptionTokens.size > 1) info["方法"] = nonOptionTokens[1]
     }
 
-    private fun parseThreadCommand(parts: List<String>, info: MutableMap<String, String>) {
-        val nonOptionParts = parts.drop(1).filter { !it.startsWith("-") }
-        if (nonOptionParts.isNotEmpty()) info["线程ID"] = nonOptionParts[0]
+    private fun parseClassOnlyCommand(tokens: List<String>, info: MutableMap<String, String>) {
+        val nonOptionTokens = tokens.drop(1).filter { !it.startsWith("-") }
+        if (nonOptionTokens.isNotEmpty()) info["类"] = nonOptionTokens[0]
     }
 
-    private fun parseVmtoolCommand(parts: List<String>, info: MutableMap<String, String>) {
-        for (i in parts.indices) {
+    private fun parseOgnlCommand(command: String, info: MutableMap<String, String>) {
+        // ognl 命令的表达式可能很复杂，提取引号内的内容
+        val exprMatch = Regex("ognl\\s+(?:-[^\\s]+\\s+)*['\"](.+?)['\"]", RegexOption.DOT_MATCHES_ALL).find(command)
+            ?: Regex("ognl\\s+(?:-[^\\s]+\\s+)*([^\\s-]+)").find(command)
+        exprMatch?.let {
+            info["表达式"] = it.groupValues[1]
+        }
+    }
+
+    private fun parseGetstaticCommand(tokens: List<String>, info: MutableMap<String, String>) {
+        val nonOptionTokens = tokens.drop(1).filter { !it.startsWith("-") }
+        if (nonOptionTokens.isNotEmpty()) info["类"] = nonOptionTokens[0]
+        if (nonOptionTokens.size > 1) info["字段"] = nonOptionTokens[1]
+    }
+
+    private fun parseThreadCommand(tokens: List<String>, info: MutableMap<String, String>) {
+        val nonOptionTokens = tokens.drop(1).filter { !it.startsWith("-") }
+        if (nonOptionTokens.isNotEmpty()) info["线程ID"] = nonOptionTokens[0]
+    }
+
+    private fun parseVmtoolCommand(tokens: List<String>, info: MutableMap<String, String>) {
+        for (i in tokens.indices) {
             when {
-                parts[i] == "--action" && i + 1 < parts.size -> info["操作"] = parts[i + 1]
-                parts[i] == "--className" && i + 1 < parts.size -> info["类"] = parts[i + 1]
+                tokens[i] == "--action" && i + 1 < tokens.size -> info["操作"] = tokens[i + 1]
+                tokens[i] == "--className" && i + 1 < tokens.size -> info["类"] = tokens[i + 1]
             }
         }
     }
